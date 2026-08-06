@@ -1,0 +1,7 @@
+{
+  "event_id": "weather-001",
+  "type": "SEVERE_WEATHER_ALERT",
+  "location": "Exterior Location A",
+  "severity": "high",
+  "recommended_action": "Evaluate schedule change"
+}

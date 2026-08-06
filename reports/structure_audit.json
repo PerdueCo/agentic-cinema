@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-08-06T10:08:37-04:00",
+  "project_root": "C:\\Users\\cash america\\Documents\\Projects\\Agentic-Cinema",
+  "completion_percent": 100.0,
+  "required_count": 115,
+  "present_count": 115,
+  "missing_folders": [],
+  "missing_files": [],
+  "unexpected_items": [
+    "bootstrap_agentic_studio.py",
+    "bootstrap_agentic_studio_v2.py",
+    "docs/security/",
+    "docs/security/SecurityPlan.md",
+    "env.example",
+    "github/",
+    "github/ISSUE_TEMPLATE/",
+    "github/ISSUE_TEMPLATE/feature_request.md",
+    "github/workflows/",
+    "github/workflows/README.md",
+    "gitignore"
+  ],
+  "status": "PASS"
+}
