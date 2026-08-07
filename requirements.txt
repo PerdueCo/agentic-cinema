@@ -1,0 +1,13 @@
+# Google Cloud AI (required for Stage One eligibility)
+google-genai>=0.3.0
+
+# Parallel track requirement — Search API SDK
+parallel-web>=0.1.0
+
+# Backend
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Dev / test
+pytest>=8.0.0
+pytest-asyncio>=0.24.0

@@ -44,15 +44,23 @@ A weather condition changes.
 ## Technology Direction
 
 - Google Cloud
-- Gemini
+- Gemini (via `google-genai`)
 - Google Cloud Agent Builder
-- IBM Bob
-- Optional real-time Confluent event integration
+- Parallel Search API (`parallel-web`) for live, grounded research
 - Python and FastAPI backend
 - React and TypeScript frontend
 - Human-in-the-loop approvals
 - Explainable AI recommendations
 - Event-driven Digital Twin architecture
+
+## Hackathon Track: Parallel
+
+This project targets the **Parallel** track of the Google Cloud Agentic
+Cinema Hackathon. The Research Agent (`src/agents/research_agent.py`) uses
+the Parallel Search API at runtime to ground scheduling and budget decisions
+in live, real-world information — for example, current weather conditions
+at a shoot location, permit requirements, or comparable production costs —
+before Gemini reasons over the result.
 
 ## Project Navigation
 
