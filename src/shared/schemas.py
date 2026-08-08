@@ -75,6 +75,22 @@ class BudgetAssessment:
 
 
 @dataclass
+class ProducerRecommendation:
+    """Output of the Producer Agent — the final synthesis a human approves.
+
+    This is the one recommendation a human actually reads and acts on.
+    Everything upstream (Research, Scheduling, Budget) feeds into it, so
+    the human reviews a single coherent call instead of three separate
+    agent outputs on their own.
+    """
+
+    final_decision: str
+    summary: str
+    rationale: str
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
 class WeatherDisruptionEvent:
     """The seed event for the demonstration story described in the README."""
 
