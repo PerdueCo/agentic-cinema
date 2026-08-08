@@ -58,6 +58,23 @@ class ScheduleRecommendation:
 
 
 @dataclass
+class BudgetAssessment:
+    """Output of the Budget Agent.
+
+    `estimated_cost_impact` stays a string (e.g. "$3,000-$5,000") rather
+    than a number, because without real day-rate and crew-size data wired
+    in yet, Gemini is producing an informed estimate, not a calculation.
+    Representing it as a precise float would overstate the agent's actual
+    certainty — the string keeps that honest.
+    """
+
+    estimated_cost_impact: str
+    reasoning: str
+    recommended_action: str
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
 class WeatherDisruptionEvent:
     """The seed event for the demonstration story described in the README."""
 
