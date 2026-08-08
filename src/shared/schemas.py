@@ -41,6 +41,23 @@ class ResearchFinding:
 
 
 @dataclass
+class ScheduleRecommendation:
+    """Output of the Scheduling Agent.
+
+    `suggested_action` is deliberately a plain string rather than an enum —
+    Gemini's raw decision word — so a human reviewer can see exactly what
+    the model said rather than a value that's already been coerced into a
+    fixed category. The Budget Agent reads `suggested_action` to decide
+    whether it needs to price out a reschedule or relocation.
+    """
+
+    affected_scene_ids: list[str]
+    reasoning: str
+    suggested_action: str
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
 class WeatherDisruptionEvent:
     """The seed event for the demonstration story described in the README."""
 
