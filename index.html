@@ -570,6 +570,7 @@ footer{
       <p class="slate">YOUR ROLE</p>
       <h3 id="resultTitle">—</h3>
       <p id="resultDesc">Pick a chip above to get your call sheet.</p>
+      <a id="applyBtn" class="btn btn--hero" href="#" target="_blank" rel="noopener" style="display:none;margin-top:20px;">Send your call sheet</a>
     </div>
   </div>
 </section>
@@ -715,6 +716,10 @@ Object.keys(cast).forEach(name=>{
     document.getElementById('resultTitle').textContent = data.r;
     document.getElementById('resultDesc').textContent = data.d;
     document.getElementById('crewResult').classList.add('show');
+    const applyBtn = document.getElementById('applyBtn');
+    const issueTitle = encodeURIComponent(`Crew application: ${name} → ${data.r}`);
+    applyBtn.href = `https://github.com/PerdueCo/agentic-cinema/issues/new?template=crew_application.md&title=${issueTitle}`;
+    applyBtn.style.display = 'inline-block';
   });
   chipRow.appendChild(b);
 });
