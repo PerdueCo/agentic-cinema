@@ -9,6 +9,20 @@ and optimize filmmaking from script to release.
 Instead of demonstrating only a chatbot, this project demonstrates a living
 movie studio built around a shared Digital Twin.
 
+## Repository Guide — What You're Looking At
+
+This repository holds two distinct things. If you're a judge or reviewer,
+start with the first one:
+
+- **The hackathon submission** — `digital-twin/index.html` and
+  `src/agents/` are the actual Agentic Studio Digital Twin: the working
+  code, the Research Agent, and the digital twin architecture this
+  submission is judged on.
+- **The crew recruitment page** — the root `index.html` is a separate
+  landing page for **Agentic Cinema**, an open call inviting builders from
+  other disciplines to join this project's development. It is not part of
+  the submission itself.
+
 ## Core Vision
 
 The platform models:
