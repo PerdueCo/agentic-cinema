@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Cinema — Living Digital Twin</title>
+<meta name="description" content="Agentic Cinema Digital Twin trailer: Real World → Digital Twin → Data → Physics → Agents → Human Decision.">
+<style>
+:root{
+  --bg:#05080c;--panel:#0b1118;--panel2:#101923;--line:#1f3448;--text:#eef6ff;
+  --muted:#8fa5b8;--cyan:#55d9ff;--blue:#4f8cff;--green:#54e6a7;--amber:#ffbf5b;
+  --red:#ff646f;--purple:#ae85ff;--white:#fff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}
+body{min-height:100vh;overflow-x:hidden}
+button{font:inherit}
+.shell{min-height:100vh;position:relative;background:
+ radial-gradient(circle at 18% 15%,rgba(79,140,255,.13),transparent 24%),
+ radial-gradient(circle at 82% 22%,rgba(85,217,255,.08),transparent 25%),
+ linear-gradient(180deg,#05080c 0%,#07101a 56%,#04070a 100%)}
+.gridfx{position:fixed;inset:0;pointer-events:none;opacity:.18;background-image:
+ linear-gradient(rgba(85,217,255,.12) 1px,transparent 1px),
+ linear-gradient(90deg,rgba(85,217,255,.12) 1px,transparent 1px);
+ background-size:48px 48px;mask-image:linear-gradient(to bottom,transparent,black 25%,black 70%,transparent)}
+.topbar{height:62px;border-bottom:1px solid rgba(85,217,255,.18);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:relative;z-index:5;background:rgba(5,8,12,.74);backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:12px;font-weight:700;letter-spacing:.12em;font-size:13px}
+.brandmark{width:28px;height:28px;border:1px solid var(--cyan);display:grid;place-items:center;transform:rotate(45deg)}
+.brandmark span{transform:rotate(-45deg);font-size:12px;color:var(--cyan)}
+.statusline{display:flex;gap:16px;color:var(--muted);font-size:12px;letter-spacing:.06em}
+.statusline b{color:var(--green);font-weight:600}
+.hero{position:relative;z-index:2;padding:24px clamp(16px,3vw,40px) 12px}
+.kicker{color:var(--cyan);font-size:12px;letter-spacing:.22em;text-transform:uppercase}
+h1{font-size:clamp(30px,5vw,64px);line-height:.98;margin:10px 0 8px;letter-spacing:-.045em;max-width:1000px}
+.lede{max-width:900px;color:#adc0d1;font-size:clamp(15px,2vw,19px);margin:0}
+.stage{position:relative;z-index:2;margin:14px clamp(12px,2vw,26px) 0;border:1px solid rgba(85,217,255,.18);border-radius:18px;overflow:hidden;background:#020509;box-shadow:0 24px 80px rgba(0,0,0,.45)}
+.stage-inner{position:relative;aspect-ratio:16/8.6;min-height:480px}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,transparent 0,transparent 3px,rgba(255,255,255,.025) 4px);mix-blend-mode:screen}
+.vignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 160px rgba(0,0,0,.88)}
+.hud{position:absolute;inset:0;padding:18px;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+.hudtop{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.scenechip,.riskchip{font-size:11px;letter-spacing:.15em;text-transform:uppercase;border:1px solid rgba(85,217,255,.35);padding:8px 10px;background:rgba(2,7,12,.66);backdrop-filter:blur(8px)}
+.riskchip{border-color:rgba(255,191,91,.5);color:var(--amber)}
+.caption{max-width:720px;background:linear-gradient(90deg,rgba(3,7,11,.94),rgba(3,7,11,.62),transparent);padding:14px 18px;border-left:2px solid var(--cyan)}
+.caption .time{font-size:11px;color:var(--cyan);letter-spacing:.16em;text-transform:uppercase}
+.caption h2{font-size:clamp(22px,3vw,38px);margin:5px 0 6px}
+.caption p{margin:0;color:#c6d7e6;font-size:clamp(14px,1.7vw,17px);line-height:1.45}
+.center-title{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;text-align:center;padding:24px}
+.center-title div{opacity:0;transform:scale(.96);transition:all .7s ease}
+.center-title.show div{opacity:1;transform:scale(1)}
+.center-title .big{font-size:clamp(28px,5vw,66px);font-weight:800;letter-spacing:-.04em}
+.center-title .sub{font-size:12px;letter-spacing:.22em;color:var(--cyan);margin-top:10px;text-transform:uppercase}
+/* Shared right-side HUD dock: telemetry, agent grid and decision panel are
+   normal-flow children of ONE positioned container, so they stack in order
+   and can never overlap/overwrite one another, regardless of how many are
+   visible at once. */
+.hud-right{position:absolute;right:18px;top:64px;bottom:78px;width:min(340px,40vw);display:flex;flex-direction:column;gap:10px;pointer-events:none;overflow-y:auto;scrollbar-width:thin}
+.telemetry{width:100%;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;flex:0 0 auto}
+.tcard{border:1px solid rgba(143,165,184,.24);background:rgba(3,8,13,.7);padding:9px 10px;backdrop-filter:blur(7px)}
+.tlabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+.tval{font-size:18px;margin-top:2px}.tval.warn{color:var(--amber)}.tval.danger{color:var(--red)}.tval.good{color:var(--green)}
+.flow{position:absolute;left:18px;top:64px;width:min(330px,40vw);display:none;gap:6px;flex-direction:column}
+.flow.show{display:flex}
+.fnode{border:1px solid rgba(85,217,255,.28);padding:8px 10px;background:rgba(2,7,12,.78);font-size:12px}
+.fnode strong{color:var(--cyan)}
+.arrow{color:var(--cyan);padding-left:15px}
+.agentgrid{width:100%;display:none;grid-template-columns:repeat(3,1fr);gap:7px;flex:0 0 auto}
+.agentgrid.show{display:grid}
+.agent{font-size:10px;padding:8px;border:1px solid rgba(143,165,184,.28);background:rgba(3,8,13,.78);color:var(--muted)}
+.agent.on{border-color:rgba(84,230,167,.6);color:var(--green);box-shadow:0 0 20px rgba(84,230,167,.08)}
+.agent.alert{border-color:rgba(255,191,91,.75);color:var(--amber)}
+.decision{width:100%;border:1px solid rgba(84,230,167,.5);background:rgba(3,10,12,.88);padding:14px;display:none;flex:0 0 auto}
+.decision.show{display:block}
+.decision h3{margin:0 0 7px;color:var(--green);font-size:14px}
+.decision p{font-size:12px;color:#c3d7d0;margin:0 0 9px;line-height:1.4}
+.decision .approval{display:flex;gap:8px;align-items:center;color:var(--green);font-size:11px;letter-spacing:.1em}
+.controls{position:relative;z-index:3;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid rgba(85,217,255,.12);background:#071018}
+.ctrlbtn{border:1px solid rgba(85,217,255,.28);color:var(--text);background:#0b1620;padding:9px 13px;border-radius:8px;cursor:pointer}
+.ctrlbtn.primary{background:var(--cyan);color:#001018;border-color:var(--cyan);font-weight:700}
+.timeline{height:5px;border-radius:99px;background:#132333;overflow:hidden;position:relative}
+.progress{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .15s linear}
+.ticks{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:12px 16px 16px;background:#071018}
+.tick{border:1px solid rgba(143,165,184,.2);background:#0a131c;color:#91a9bc;padding:7px 9px;border-radius:999px;font-size:11px;cursor:pointer}
+.tick.active{color:#001018;background:var(--cyan);border-color:var(--cyan)}
+.arch{position:relative;z-index:2;padding:36px clamp(16px,3vw,40px) 52px}
+.arch h2{font-size:28px;margin:0 0 7px}.arch>p{color:var(--muted);margin:0 0 22px}
+.pipeline{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.pipe{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:15px;min-height:120px}
+.pipe:not(:last-child):after{content:'→';position:absolute;right:-10px;top:44%;z-index:2;color:var(--cyan);font-weight:800;background:var(--bg);padding:0 2px}
+.pipe .num{font-size:10px;color:var(--cyan);letter-spacing:.15em}.pipe h3{font-size:14px;margin:8px 0 5px}.pipe p{font-size:12px;color:var(--muted);margin:0;line-height:1.45}
+.foot{border-top:1px solid rgba(85,217,255,.14);padding:24px clamp(16px,3vw,40px) 34px;color:var(--muted);font-size:12px;position:relative;z-index:2}
+@media(max-width:900px){.pipeline{grid-template-columns:repeat(3,1fr)}.pipe:nth-child(3):after{display:none}.statusline span:nth-child(-n+2){display:none}.stage-inner{min-height:560px;aspect-ratio:auto}.hud-right{width:46vw}.agentgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.topbar{padding:0 12px}.hero{padding-top:18px}.stage{margin-left:8px;margin-right:8px}.stage-inner{min-height:690px}.hud-right{right:10px;top:60px;bottom:96px;width:56vw}.telemetry{grid-template-columns:1fr}.flow{left:10px;top:60px;width:38vw}.agentgrid{grid-template-columns:1fr}.hud{padding:10px}.caption{max-width:100%;margin-bottom:40px}.controls{grid-template-columns:1fr 1fr}.timeline{grid-column:1/-1;grid-row:1}.pipeline{grid-template-columns:1fr}.pipe:after{display:none}.ticks{display:none}}
+
+/* ============================================================
+   RESPONSIVE ARCHITECTURE CORRECTION
+   Desktop keeps the cinematic HUD.
+   Laptop/tablet/mobile recompose content into normal document flow.
+   ============================================================ */
+
+.responsive-grid{
+  display:contents;
+}
+
+.scene-story,
+.telemetry-panel,
+.physics-panel,
+.agent-panel,
+.recommendation-panel,
+.human-decision-panel{
+  display:none;
+}
+
+/* Desktop >= 1200px: preserve current cinematic HUD */
+@media (min-width:1200px){
+  .stage-inner{aspect-ratio:16/8.6;min-height:480px}
+}
+
+/* Laptop 901px-1199px:
+   Keep compact telemetry on canvas.
+   Move agents/recommendation below canvas. */
+@media (min-width:901px) and (max-width:1199px){
+  .stage-inner{
+    min-height:520px;
+    aspect-ratio:16/9;
+  }
+
+  .hud-right{
+    width:min(300px,32vw);
+  }
+
+  /* Agents + recommendation become document-flow panels below canvas */
+  .hud-right .agentgrid,
+  .hud-right .decision{
+    display:none !important;
+  }
+
+  .laptop-detail{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:12px;
+    padding:14px 16px 0;
+    background:#071018;
+  }
+
+  .laptop-detail .agent-panel,
+  .laptop-detail .recommendation-panel,
+  .laptop-detail .human-decision-panel{
+    display:block;
+    border:1px solid rgba(143,165,184,.22);
+    background:var(--panel);
+    border-radius:12px;
+    padding:14px;
+  }
+
+  .laptop-detail .agent-panel[hidden],
+  .laptop-detail .recommendation-panel[hidden],
+  .laptop-detail .human-decision-panel[hidden]{
+    display:none;
+  }
+
+  .agent-list-flow{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:8px;
+  }
+}
+
+/* Tablet 621px-900px:
+   Canvas first; story, telemetry/physics, agents, decision below. */
+@media (min-width:621px) and (max-width:900px){
+  .stage{
+    overflow:visible;
+  }
+
+  .stage-inner{
+    min-height:0;
+    aspect-ratio:4/3;
+    overflow:hidden;
+    border-bottom:1px solid rgba(85,217,255,.12);
+  }
+
+  .hud-right,
+  .flow{
+    display:none !important;
+  }
+
+  .hud{
+    padding:12px;
+  }
+
+  .hud .caption{
+    display:none;
+  }
+
+  .responsive-grid{
+    display:grid;
+    grid-template-areas:
+      "story story"
+      "telemetry physics"
+      "agents agents"
+      "decision decision"
+      "human human";
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    padding:14px 16px;
+    background:#071018;
+  }
+
+  .scene-story{
+    grid-area:story;
+    display:block;
+  }
+
+  .telemetry-panel{
+    grid-area:telemetry;
+    display:block;
+  }
+
+  .physics-panel{
+    grid-area:physics;
+    display:block;
+  }
+
+  .agent-panel{
+    grid-area:agents;
+    display:block;
+  }
+
+  .recommendation-panel{
+    grid-area:decision;
+    display:block;
+  }
+
+  .human-decision-panel{
+    grid-area:human;
+    display:block;
+  }
+
+  .responsive-card{
+    border:1px solid rgba(143,165,184,.22);
+    background:var(--panel);
+    border-radius:12px;
+    padding:14px;
+  }
+
+  .responsive-card[hidden]{
+    display:none !important;
+  }
+
+  .telemetry-flow-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+
+  .agent-list-flow{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+  }
+
+  .controls{
+    margin-top:0;
+  }
+}
+
+/* Mobile <= 620px:
+   Completely recompose into normal document flow.
+   No major telemetry/physics/agents/recommendation overlays on canvas. */
+@media (max-width:620px){
+  .topbar{
+    height:auto;
+    min-height:58px;
+    padding:10px 12px;
+    align-items:flex-start;
+  }
+
+  .brand{
+    line-height:1.25;
+    letter-spacing:.08em;
+  }
+
+  .statusline{
+    display:none;
+  }
+
+  .hero{
+    padding:16px 14px 10px;
+  }
+
+  h1{
+    font-size:clamp(28px,9vw,40px);
+    line-height:1.02;
+  }
+
+  .lede{
+    font-size:15px;
+    line-height:1.45;
+  }
+
+  .stage{
+    margin:10px 8px 0;
+    overflow:visible;
+    border-radius:14px;
+  }
+
+  .stage-inner{
+    min-height:0;
+    aspect-ratio:4/3;
+    overflow:hidden;
+    border-radius:14px 14px 0 0;
+  }
+
+  .hud-right,
+  .flow{
+    display:none !important;
+  }
+
+  .hud{
+    padding:8px;
+  }
+
+  .hudtop{
+    align-items:flex-start;
+  }
+
+  .scenechip,
+  .riskchip{
+    font-size:9px;
+    letter-spacing:.08em;
+    padding:6px 7px;
+  }
+
+  .hud .caption{
+    display:none;
+  }
+
+  .center-title{
+    padding:14px;
+  }
+
+  .center-title .big{
+    font-size:clamp(24px,8vw,38px);
+  }
+
+  .center-title .sub{
+    font-size:10px;
+    letter-spacing:.12em;
+  }
+
+  .responsive-grid{
+    display:grid;
+    grid-template-areas:
+      "story"
+      "telemetry"
+      "physics"
+      "agents"
+      "decision"
+      "human";
+    grid-template-columns:1fr;
+    gap:10px;
+    padding:12px;
+    background:#071018;
+  }
+
+  .scene-story,
+  .telemetry-panel,
+  .physics-panel,
+  .agent-panel,
+  .recommendation-panel,
+  .human-decision-panel{
+    display:block;
+  }
+
+  .responsive-card{
+    border:1px solid rgba(143,165,184,.22);
+    background:var(--panel);
+    border-radius:12px;
+    padding:13px;
+  }
+
+  .responsive-card[hidden]{
+    display:none !important;
+  }
+
+  .responsive-card h3{
+    margin:0 0 10px;
+    font-size:13px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+
+  .responsive-card p{
+    margin:0;
+    color:#c6d7e6;
+    font-size:14px;
+    line-height:1.45;
+  }
+
+  .telemetry-flow-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+
+  .telemetry-row,
+  .physics-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    border-bottom:1px solid rgba(143,165,184,.14);
+    padding:8px 0;
+  }
+
+  .telemetry-row:last-child,
+  .physics-row:last-child{
+    border-bottom:0;
+  }
+
+  .telemetry-row span:first-child,
+  .physics-row span:first-child{
+    color:var(--muted);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+
+  .telemetry-row strong,
+  .physics-row strong{
+    font-size:15px;
+  }
+
+  .agent-list-flow{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:7px;
+  }
+
+  .agent-mobile{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    border:1px solid rgba(143,165,184,.18);
+    padding:9px 10px;
+    background:#0a131c;
+    font-size:12px;
+  }
+
+  .agent-mobile strong{
+    color:var(--green);
+  }
+
+  .agent-mobile.alert strong{
+    color:var(--amber);
+  }
+
+  .view-all-agents{
+    margin-top:8px;
+    width:100%;
+    border:1px solid rgba(85,217,255,.3);
+    background:#0b1620;
+    color:var(--text);
+    padding:9px 10px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+
+  .all-agents-extra{
+    display:none;
+    margin-top:8px;
+  }
+
+  .all-agents-extra.open{
+    display:grid;
+    gap:7px;
+  }
+
+  .controls{
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    padding:12px;
+  }
+
+  .timeline{
+    grid-column:1/-1;
+    grid-row:1;
+  }
+
+  .ctrlbtn{
+    min-height:44px;
+  }
+
+  .ticks{
+    display:none;
+  }
+
+  .arch{
+    padding:28px 14px 36px;
+  }
+
+  .arch h2{
+    font-size:24px;
+  }
+
+  .pipeline{
+    grid-template-columns:1fr;
+  }
+
+  .pipe:after{
+    display:none !important;
+  }
+}
+
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="gridfx"></div>
+<header class="topbar">
+  <div class="brand"><div class="brandmark"><span>AC</span></div> AGENTIC CINEMA // DIGITAL TWIN</div>
+  <div class="statusline"><span>LOCATION <b>07</b></span><span>SCENE <b>12A</b></span><span>SYSTEM <b>LIVE</b></span></div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A living movie production</div>
+  <h1>What if a film set could sense what was about to happen?</h1>
+  <p class="lede">Real World → Digital Twin → Data → Physics → AI Agents → Human Decision. A weather event becomes a production decision you can see, explain, and audit.</p>
+</section>
+
+<section class="stage">
+  <div class="stage-inner">
+    <canvas id="world"></canvas>
+    <div class="scan"></div><div class="vignette"></div>
+    <div class="center-title" id="centerTitle"><div><div class="big" id="centerBig"></div><div class="sub" id="centerSub"></div></div></div>
+
+    <div class="flow" id="flow">
+      <div class="fnode"><strong>LIVE INPUT</strong><br>Weather + production telemetry</div>
+      <div class="arrow">↓</div>
+      <div class="fnode"><strong>PHYSICS / RULES</strong><br>Wind load • rain exposure • stability</div>
+      <div class="arrow">↓</div>
+      <div class="fnode"><strong>DIGITAL TWIN STATE</strong><br>Scene 12A risk → <span id="flowRisk">nominal</span></div>
+    </div>
+
+    <div class="hud-right" id="hudRight">
+      <div class="telemetry" id="telemetry">
+        <div class="tcard"><div class="tlabel">Wind</div><div class="tval" id="wind">12 mph</div></div>
+        <div class="tcard"><div class="tlabel">Rain probability</div><div class="tval" id="rain">18%</div></div>
+        <div class="tcard"><div class="tlabel">Pressure</div><div class="tval" id="pressure">1014 hPa</div></div>
+        <div class="tcard"><div class="tlabel">Equipment risk</div><div class="tval good" id="risk">LOW</div></div>
+      </div>
+
+      <div class="agentgrid" id="agents"></div>
+
+      <div class="decision" id="decision">
+        <h3>RECOMMENDED PRODUCTION ACTION</h3>
+        <p>Pause Exterior Scene 12A. Secure camera crane and lighting. Move crew to Stage B. Advance Interior Scene 18 while the weather cell passes.</p>
+        <div class="approval"><span>●</span> HUMAN APPROVAL → APPROVED</div>
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="hudtop"><div class="scenechip" id="sceneChip">SCENE 01 // THE REAL SET</div><div class="riskchip" id="riskChip">PRODUCTION RISK // LOW</div></div>
+      <div class="caption">
+        <div class="time" id="timecode">00:00 — 00:08</div>
+        <h2 id="sceneTitle">The Real Set</h2>
+        <p id="sceneText">A crew prepares an exterior shot. Camera, lights, equipment and people are all in position. The weather begins to change.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reflowed content for laptop/tablet/mobile.
+       These panels render from the SAME scene/telemetry state as the desktop HUD. -->
+  <div class="laptop-detail" id="laptopDetail">
+    <section class="agent-panel responsive-card" id="laptopAgentPanel" hidden>
+      <h3>Agent Analysis</h3>
+      <div class="agent-list-flow" id="laptopAgentList"></div>
+    </section>
+    <section class="recommendation-panel responsive-card" id="laptopRecommendationPanel" hidden>
+      <h3>Recommended Production Action</h3>
+      <p id="laptopRecommendationText"></p>
+    </section>
+    <section class="human-decision-panel responsive-card" id="laptopHumanPanel" hidden>
+      <h3>Human Decision</h3>
+      <p id="laptopHumanText"></p>
+    </section>
+  </div>
+
+  <div class="responsive-grid" id="responsiveGrid">
+    <section class="scene-story responsive-card">
+      <div class="time" id="flowTimecode">00:00 — 00:08</div>
+      <h3 id="flowSceneTitle">The Real Set</h3>
+      <p id="flowSceneText">A crew prepares an exterior shot. Camera, lights, equipment and people are all in position. The weather begins to change.</p>
+    </section>
+
+    <section class="telemetry-panel responsive-card" id="flowTelemetryPanel" hidden>
+      <h3>Live Telemetry</h3>
+      <div class="telemetry-flow-grid">
+        <div class="telemetry-row"><span>Wind</span><strong id="flowWind">12 mph</strong></div>
+        <div class="telemetry-row"><span>Rain</span><strong id="flowRain">18%</strong></div>
+        <div class="telemetry-row"><span>Pressure</span><strong id="flowPressure">1014 hPa</strong></div>
+        <div class="telemetry-row"><span>Equipment Risk</span><strong id="flowEquipmentRisk">LOW</strong></div>
+      </div>
+    </section>
+
+    <section class="physics-panel responsive-card" id="flowPhysicsPanel" hidden>
+      <h3>Physics / Risk</h3>
+      <div class="physics-row"><span>Wind Load</span><strong id="flowWindLoad">NOMINAL</strong></div>
+      <div class="physics-row"><span>Rain Exposure</span><strong id="flowRainExposure">LOW</strong></div>
+      <div class="physics-row"><span>Camera Crane</span><strong id="flowCraneRisk">LOW RISK</strong></div>
+    </section>
+
+    <section class="agent-panel responsive-card" id="flowAgentPanel" hidden>
+      <h3>Relevant Agent Analysis</h3>
+      <div class="agent-list-flow" id="flowAgentList"></div>
+      <button type="button" class="view-all-agents" id="viewAllAgents">View All 12 Agents</button>
+      <div class="all-agents-extra" id="allAgentsExtra"></div>
+    </section>
+
+    <section class="recommendation-panel responsive-card" id="flowRecommendationPanel" hidden>
+      <h3>Recommendation</h3>
+      <p id="flowRecommendationText"></p>
+    </section>
+
+    <section class="human-decision-panel responsive-card" id="flowHumanPanel" hidden>
+      <h3>Human Approval</h3>
+      <p id="flowHumanText"></p>
+    </section>
+  </div>
+
+  <div class="controls">
+    <button class="ctrlbtn" id="prev">← Previous</button>
+    <div class="timeline"><div class="progress" id="progress"></div></div>
+    <button class="ctrlbtn primary" id="play">▶ Play Trailer</button>
+  </div>
+  <div class="ticks" id="ticks"></div>
+</section>
+
+<section class="arch">
+  <h2>The Digital Twin architecture revealed in 90 seconds</h2>
+  <p>The trailer is also the system explanation. Each visual beat exposes one layer of the architecture.</p>
+  <div class="pipeline">
+    <div class="pipe"><div class="num">01</div><h3>REAL WORLD</h3><p>Scene, location, crew, cameras, lights, weather and physical conditions.</p></div>
+    <div class="pipe"><div class="num">02</div><h3>DIGITAL TWIN</h3><p>Identity, relationships, state, history and events representing the production.</p></div>
+    <div class="pipe"><div class="num">03</div><h3>DATA</h3><p>Weather, telemetry, schedules, budgets and production status update the twin.</p></div>
+    <div class="pipe"><div class="num">04</div><h3>PHYSICS</h3><p>Raw measurements become operational meaning through thresholds and physical rules.</p></div>
+    <div class="pipe"><div class="num">05</div><h3>AGENTS</h3><p>Specialized production agents reason from the same shared state.</p></div>
+    <div class="pipe"><div class="num">06</div><h3>DECISION</h3><p>Explainable recommendation → human approval → updated state and audit history.</p></div>
+  </div>
+</section>
+
+<footer class="foot">Agentic Cinema — Agentic Studio Digital Twin • Demonstration prototype • Simulated telemetry for presentation purposes.</footer>
+</div>
+
+<script>
+const canvas=document.getElementById('world'),ctx=canvas.getContext('2d');
+let W=0,H=0,dpr=Math.min(devicePixelRatio||1,2),t=0,scene=0,playing=false,start=0;
+const scenes=[
+ {name:'THE REAL SET',title:'The Real Set',tc:'00:00 — 00:08',text:'A crew prepares an exterior shot. Camera, lights, equipment and people are all in position. The weather begins to change.',mode:'real',dur:8},
+ {name:'THE MIRROR',title:'The Digital Mirror',tc:'00:08 — 00:17',text:'Every production object has a digital identity: Scene 12A, Location 07, Camera A, crew, equipment and schedule.',mode:'twin',dur:9},
+ {name:'DATA ARRIVES',title:'The Set Starts Talking',tc:'00:17 — 00:27',text:'Weather and production telemetry update the state of the twin. Wind rises. Pressure falls. Rain probability climbs.',mode:'data',dur:10},
+ {name:'PHYSICS',title:'Physics Gives Data Meaning',tc:'00:27 — 00:39',text:'The system evaluates physical consequences: wind loading, equipment stability, rain exposure and safety thresholds.',mode:'physics',dur:12},
+ {name:'AGENTS',title:'The Agents Wake Up',tc:'00:39 — 00:51',text:'Specialized agents observe the same changing production state from their own responsibilities.',mode:'agents',dur:12},
+ {name:'COLLABORATION',title:'One Event. Many Consequences.',tc:'00:51 — 01:04',text:'Scheduling sees delay. Budget sees cost. Camera sees equipment exposure. Producer evaluates production alternatives.',mode:'collab',dur:13},
+ {name:'RECOMMENDATION',title:'A Production Decision Emerges',tc:'01:04 — 01:16',text:'The system recommends pausing the exterior shot, protecting equipment, moving the crew and advancing an interior scene.',mode:'decision',dur:12},
+ {name:'HUMAN COMMAND',title:'Human in Command',tc:'01:16 — 01:24',text:'The producer reviews the evidence and approves the action. Autonomy supports accountability rather than replacing it.',mode:'human',dur:8},
+ {name:'LIVING STUDIO',title:'A Living Movie Studio',tc:'01:24 — 01:32',text:'The plan changes before the storm arrives. The twin records the event, the reasoning, the decision and the new production state.',mode:'final',dur:8}
+];
+const agentNames=['Director','Producer','Scheduler','Location','Budget','Camera','VFX','Editing','Marketing','Executive','Knowledge Graph','Script'];
+const ag=document.getElementById('agents');
+agentNames.forEach(n=>{let d=document.createElement('div');d.className='agent';d.textContent=n+' Agent';ag.appendChild(d)});
+const ticks=document.getElementById('ticks');
+scenes.forEach((s,i)=>{let b=document.createElement('button');b.className='tick';b.textContent=(i+1)+' '+s.name;b.onclick=()=>setScene(i);ticks.appendChild(b)});
+
+function resize(){
+ const r=canvas.getBoundingClientRect(); W=r.width;H=r.height;
+ canvas.width=Math.max(1,Math.floor(W*dpr));canvas.height=Math.max(1,Math.floor(H*dpr));
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener('resize',resize);resize();
+
+function line(x1,y1,x2,y2,c='#55d9ff',a=.6,w=1){ctx.globalAlpha=a;ctx.strokeStyle=c;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.globalAlpha=1}
+function box(x,y,w,h,c='#55d9ff',a=.45){ctx.globalAlpha=a;ctx.strokeStyle=c;ctx.strokeRect(x,y,w,h);ctx.globalAlpha=1}
+function text(txt,x,y,c='#b9d5e9',size=11){ctx.fillStyle=c;ctx.font=`${size}px Segoe UI`;ctx.fillText(txt,x,y)}
+function circle(x,y,r,c='#55d9ff',a=.7){ctx.globalAlpha=a;ctx.strokeStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}
+
+function drawSet(wire=false,storm=0){
+ const horizon=H*.55;
+ // sky
+ let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,storm>.5?'#101725':'#13263a');g.addColorStop(.58,storm>.5?'#18212b':'#29465d');g.addColorStop(.59,'#141b20');g.addColorStop(1,'#05080b');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ // moving clouds
+ for(let i=0;i<7;i++){let x=(i*190+(t*(10+storm*24)))%(W+250)-120,y=70+(i%3)*38,r=60+(i%2)*26;ctx.globalAlpha=.08+storm*.12;ctx.fillStyle='#d7e8f3';ctx.beginPath();ctx.ellipse(x,y,r,22,0,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+ // ground perspective
+ for(let i=0;i<12;i++){let yy=horizon+(i*i)*2.2;line(0,yy,W,yy,'#4a6b80',wire?.18:.08)}
+ for(let x=-W;x<W*2;x+=85){line(W/2,horizon,x,H,'#4a6b80',wire?.16:.05)}
+ // soundstage / set wall
+ ctx.fillStyle=wire?'rgba(0,0,0,.15)':'#111b23';ctx.fillRect(W*.08,H*.35,W*.23,H*.25);box(W*.08,H*.35,W*.23,H*.25,wire?'#55d9ff':'#7891a1',wire?.65:.25);
+ for(let i=1;i<4;i++)line(W*.08+i*W*.0575,H*.35,W*.08+i*W*.0575,H*.60,wire?'#55d9ff':'#50606a',wire?.4:.12);
+ text('STAGE B',W*.095,H*.39,wire?'#55d9ff':'#91a2ac',10);
+ // camera crane
+ line(W*.44,H*.67,W*.61,H*.41,wire?'#55d9ff':'#6c7f8a',wire?.9:.75,3);
+ line(W*.44,H*.67,W*.35,H*.58,wire?'#55d9ff':'#6c7f8a',wire?.7:.55,2);
+ circle(W*.44,H*.68,18,wire?'#55d9ff':'#8899a4',wire?.7:.5);
+ box(W*.59,H*.38,46,28,wire?'#55d9ff':'#8798a2',wire?.8:.6);text('CAM A',W*.59,H*.365,wire?'#55d9ff':'#b9c8d0',9);
+ // light stands
+ [0.70,0.78].forEach((p,j)=>{line(W*p,H*.70,W*p,H*.40,wire?'#55d9ff':'#8a969d',wire?.75:.45,2);box(W*p-18,H*.36,36,24,wire?'#55d9ff':'#a9b6bc',wire?.8:.5);});
+ // crew
+ for(let i=0;i<7;i++){let x=W*(.36+i*.055),y=H*(.73+(i%2)*.03);circle(x,y-22,6,wire?'#55d9ff':'#798c97',wire?.9:.5);line(x,y-16,x,y+10,wire?'#55d9ff':'#798c97',wire?.8:.45,2);line(x,y-2,x-9,y+18,wire?'#55d9ff':'#798c97',wire?.8:.45,2);line(x,y-2,x+9,y+18,wire?'#55d9ff':'#798c97',wire?.8:.45,2)}
+ // location labels when wireframe
+ if(wire){box(W*.055,H*.31,W*.29,H*.34,'#55d9ff',.3);text('LOCATION_07 / EXTERIOR',W*.06,H*.30,'#55d9ff',10);box(W*.32,H*.32,W*.34,H*.46,'#55d9ff',.22);text('SCENE_12A',W*.33,H*.31,'#55d9ff',10);box(W*.67,H*.31,W*.16,H*.43,'#55d9ff',.22);text('LIGHTING_RIG',W*.68,H*.30,'#55d9ff',10);}
+}
+
+function digitalOverlay(intensity=1){
+ ctx.save();ctx.globalCompositeOperation='screen';
+ for(let i=0;i<14;i++){let y=H*.25+i*20;line(0,y,W,y,'#55d9ff',.03*intensity)}
+ for(let i=0;i<20;i++){let x=i*W/19;line(x,H*.25,x,H,'#55d9ff',.03*intensity)}
+ ctx.restore();
+}
+
+function weatherParticles(amount=.4){
+ for(let i=0;i<90*amount;i++){let x=(i*97+t*130)%W,y=(i*53+t*260)%H;line(x,y,x-9,y+18,'#9bdfff',.14+.2*amount,1)}
+}
+function drawPhysics(){
+ // vectors on camera crane and lighting
+ let pts=[[W*.61,H*.42],[W*.70,H*.42],[W*.78,H*.42]];
+ pts.forEach((p,i)=>{for(let k=0;k<4;k++){let yy=p[1]+k*18;line(p[0]-70,yy,p[0]-8,yy,'#ffbf5b',.65,2);line(p[0]-8,yy,p[0]-18,yy-5,'#ffbf5b',.65,2);line(p[0]-8,yy,p[0]-18,yy+5,'#ffbf5b',.65,2)}})
+ text('WIND VECTOR 31 mph',W*.48,H*.25,'#ffbf5b',12);
+ text('CRANE LOAD: ELEVATED',W*.48,H*.28,'#ff646f',11);
+ text('RAIN EXPOSURE: HIGH',W*.48,H*.31,'#ff646f',11);
+}
+
+function draw(){
+ t+=.016;ctx.clearRect(0,0,W,H);let m=scenes[scene].mode,storm=['data','physics','agents','collab','decision','human','final'].includes(m)?.85:.25;
+ drawSet(m!=='real',storm);
+ if(m!=='real')digitalOverlay(1);
+ if(['data','physics','agents','collab','decision','human','final'].includes(m))weatherParticles(.55);
+ if(m==='physics')drawPhysics();
+ if(m==='final'){ctx.fillStyle='rgba(2,8,12,.52)';ctx.fillRect(0,0,W,H)}
+ requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+
+const relevantAgents=['Location','Camera','Scheduler','Budget','Producer'];
+const recommendationText='Pause Exterior Scene 12A. Secure camera crane and lighting. Move crew to Stage B. Advance Interior Scene 18 while the weather cell passes.';
+
+function agentStatusFor(name,mode){
+  if(!['agents','collab','decision','human'].includes(mode)) return 'MONITORING';
+  if(name==='Camera') return mode==='collab'?'HIGH RISK':'ANALYZING';
+  if(name==='Location') return 'WEATHER ALERT';
+  if(name==='Scheduler') return 'ANALYZING';
+  if(name==='Budget') return 'ANALYZING';
+  if(name==='Producer') return mode==='human'?'APPROVED':mode==='decision'?'REVIEWING':'SYNTHESIZING';
+  return 'MONITORING';
+}
+
+function renderFlowAgents(mode){
+  const flow=document.getElementById('flowAgentList');
+  const laptop=document.getElementById('laptopAgentList');
+  const extra=document.getElementById('allAgentsExtra');
+
+  const render=(name)=>{
+    const st=agentStatusFor(name,mode);
+    const alert=['HIGH RISK','WEATHER ALERT'].includes(st);
+    return `<div class="agent-mobile${alert?' alert':''}"><span>${name} Agent</span><strong>${st}</strong></div>`;
+  };
+
+  flow.innerHTML=relevantAgents.map(render).join('');
+  laptop.innerHTML=relevantAgents.map(render).join('');
+  extra.innerHTML=agentNames.filter(n=>!relevantAgents.includes(n)).map(render).join('');
+}
+
+function renderResponsiveScene(s){
+  document.getElementById('flowTimecode').textContent=s.tc;
+  document.getElementById('flowSceneTitle').textContent=s.title;
+  document.getElementById('flowSceneText').textContent=s.text;
+
+  const showTelemetry=['twin','data','physics','agents','collab','decision','human'].includes(s.mode);
+  const showPhysics=['physics','agents','collab','decision','human'].includes(s.mode);
+  const showAgents=['agents','collab','decision','human'].includes(s.mode);
+  const showRecommendation=['decision','human'].includes(s.mode);
+  const showHuman=['human'].includes(s.mode);
+
+  document.getElementById('flowTelemetryPanel').hidden=!showTelemetry;
+  document.getElementById('flowPhysicsPanel').hidden=!showPhysics;
+  document.getElementById('flowAgentPanel').hidden=!showAgents;
+  document.getElementById('flowRecommendationPanel').hidden=!showRecommendation;
+  document.getElementById('flowHumanPanel').hidden=!showHuman;
+
+  document.getElementById('laptopAgentPanel').hidden=!showAgents;
+  document.getElementById('laptopRecommendationPanel').hidden=!showRecommendation;
+  document.getElementById('laptopHumanPanel').hidden=!showHuman;
+
+  document.getElementById('flowRecommendationText').textContent=recommendationText;
+  document.getElementById('laptopRecommendationText').textContent=recommendationText;
+
+  const human=showHuman?'Producer reviewed the recommendation → APPROVED. Digital Twin state updated.':'Awaiting producer review.';
+  document.getElementById('flowHumanText').textContent=human;
+  document.getElementById('laptopHumanText').textContent=human;
+
+  renderFlowAgents(s.mode);
+}
+
+document.getElementById('viewAllAgents').addEventListener('click',()=>{
+  const extra=document.getElementById('allAgentsExtra');
+  const open=extra.classList.toggle('open');
+  document.getElementById('viewAllAgents').textContent=open?'Hide Additional Agents':'View All 12 Agents';
+});
+
+
+function setTelemetry(mode){
+ let wind=12,rain=18,pressure=1014,r='LOW',cls='good';
+ if(['data','physics','agents','collab','decision','human','final'].includes(mode)){wind=31;rain=72;pressure=996;r='HIGH';cls='danger'}
+ document.getElementById('wind').textContent=wind+' mph';
+ document.getElementById('rain').textContent=rain+'%';
+ document.getElementById('pressure').textContent=pressure+' hPa';
+ let rr=document.getElementById('risk');rr.textContent=r;rr.className='tval '+cls;
+ document.getElementById('riskChip').textContent='PRODUCTION RISK // '+r;
+ document.getElementById('riskChip').style.color=r==='HIGH'?'var(--red)':'var(--amber)';
+ document.getElementById('flowRisk').textContent=r==='HIGH'?'HIGH':'nominal';
+
+ document.getElementById('flowWind').textContent=wind+' mph';
+ document.getElementById('flowRain').textContent=rain+'%';
+ document.getElementById('flowPressure').textContent=pressure+' hPa';
+ document.getElementById('flowEquipmentRisk').textContent=r;
+
+ const high=r==='HIGH';
+ document.getElementById('flowWindLoad').textContent=high?'ELEVATED':'NOMINAL';
+ document.getElementById('flowRainExposure').textContent=high?'HIGH':'LOW';
+ document.getElementById('flowCraneRisk').textContent=high?'HIGH RISK':'LOW RISK';
+
+ ['flowEquipmentRisk','flowWindLoad','flowRainExposure','flowCraneRisk'].forEach(id=>{
+   const el=document.getElementById(id);
+   el.style.color=high?'var(--red)':'var(--green)';
+ });
+}
+
+function center(big='',sub=''){
+ let c=document.getElementById('centerTitle');document.getElementById('centerBig').textContent=big;document.getElementById('centerSub').textContent=sub;
+ c.classList.remove('show');if(big)setTimeout(()=>c.classList.add('show'),60);
+}
+function setScene(i){
+ scene=Math.max(0,Math.min(scenes.length-1,i));let s=scenes[scene];
+ document.getElementById('sceneChip').textContent=`SCENE ${String(scene+1).padStart(2,'0')} // ${s.name}`;
+ document.getElementById('sceneTitle').textContent=s.title;document.getElementById('sceneText').textContent=s.text;document.getElementById('timecode').textContent=s.tc;
+ document.querySelectorAll('.tick').forEach((b,j)=>b.classList.toggle('active',j===scene));
+ const flow=document.getElementById('flow'),agents=document.getElementById('agents'),decision=document.getElementById('decision');
+ flow.classList.toggle('show',['physics'].includes(s.mode));agents.classList.toggle('show',['agents','collab','decision','human'].includes(s.mode));decision.classList.toggle('show',['decision','human'].includes(s.mode));
+ document.querySelectorAll('.agent').forEach((a,j)=>{a.className='agent';if(['agents','collab','decision','human'].includes(s.mode))a.classList.add('on');if(s.mode==='collab'&&[1,2,3,4,5].includes(j))a.classList.add('alert')});
+ document.getElementById('telemetry').style.display=['twin','data','physics','agents','collab','decision','human'].includes(s.mode)?'grid':'none';
+ setTelemetry(s.mode);renderResponsiveScene(s);center();
+ if(s.mode==='twin')center('DIGITAL TWIN ONLINE','PHYSICAL PRODUCTION → SHARED DIGITAL STATE');
+ if(s.mode==='final')center('AGENTIC CINEMA','THE PRODUCTION DOESN’T JUST HAVE DATA. IT UNDERSTANDS WHAT THE DATA MEANS.');
+ document.getElementById('progress').style.width=((scene)/(scenes.length-1)*100)+'%';
+}
+setScene(0);
+
+function totalBefore(i){return scenes.slice(0,i).reduce((a,b)=>a+b.dur,0)}
+const total=scenes.reduce((a,b)=>a+b.dur,0);
+function loop(now){
+ if(!playing)return;let elapsed=(now-start)/1000;
+ if(elapsed>=total){playing=false;setScene(scenes.length-1);document.getElementById('play').textContent='↻ Replay Trailer';return}
+ let acc=0,ix=0;for(;ix<scenes.length;ix++){if(elapsed<acc+scenes[ix].dur)break;acc+=scenes[ix].dur}
+ if(ix!==scene)setScene(ix);
+ document.getElementById('progress').style.width=(elapsed/total*100)+'%';
+ requestAnimationFrame(loop);
+}
+document.getElementById('play').onclick=()=>{
+ if(playing){playing=false;document.getElementById('play').textContent='▶ Resume';return}
+ if(scene===scenes.length-1)setScene(0);
+ playing=true;start=performance.now()-totalBefore(scene)*1000;document.getElementById('play').textContent='Ⅱ Pause';requestAnimationFrame(loop);
+};
+document.getElementById('prev').onclick=()=>{playing=false;setScene(scene-1);document.getElementById('play').textContent='▶ Play Trailer'};
+</script>
+</body>
+</html>
