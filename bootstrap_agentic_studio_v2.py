@@ -507,7 +507,8 @@ class HealthReport:
 
 
 def normalize(path: Path) -> str:
-    return path.as_posix().lstrip("./")
+    p = path.as_posix()
+    return p[2:] if p.startswith("./") else p
 
 
 def now_iso() -> str:
