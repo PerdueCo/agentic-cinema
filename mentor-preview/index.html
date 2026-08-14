@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A concise mentor preview of Clarence Perdue Jr.'s Agentic Studio Digital Twin project.">
+  <title>Agentic Studio Digital Twin — Mentor Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #06101a;
+      --panel: #0b1a29;
+      --panel-2: #102338;
+      --line: #1c4663;
+      --text: #eff8ff;
+      --muted: #a9bed0;
+      --cyan: #39c7f2;
+      --green: #48df9b;
+      --amber: #ffc260;
+      --red: #ff747d;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(57,199,242,.15), transparent 28rem),
+        linear-gradient(180deg, #06101a, #03080d 75%);
+      line-height: 1.55;
+    }
+    a { color: var(--cyan); }
+    img, video { display: block; width: 100%; border-radius: 12px; }
+    .wrap { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; }
+    header {
+      border-bottom: 1px solid rgba(57,199,242,.2);
+      background: rgba(3,8,13,.82);
+      backdrop-filter: blur(14px);
+    }
+    .topbar {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      font-size: .9rem;
+    }
+    .brand { font-weight: 800; letter-spacing: .08em; }
+    .status { color: var(--green); }
+    .hero { padding: 72px 0 42px; }
+    .eyebrow { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase; font-size: .78rem; }
+    h1 { max-width: 850px; margin: 10px 0 18px; font-size: clamp(2.5rem, 7vw, 5.6rem); line-height: .95; letter-spacing: -.055em; }
+    h2 { margin: 0 0 12px; font-size: clamp(1.7rem, 4vw, 2.65rem); line-height: 1.1; }
+    h3 { margin: 0 0 8px; }
+    .lede { max-width: 860px; color: #c8d8e6; font-size: clamp(1.05rem, 2vw, 1.3rem); }
+    .honesty {
+      margin-top: 28px;
+      padding: 20px;
+      border: 1px solid rgba(255,194,96,.42);
+      border-left: 4px solid var(--amber);
+      border-radius: 12px;
+      background: rgba(255,194,96,.07);
+    }
+    .quick-nav { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .button {
+      display: inline-block;
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      font-weight: 700;
+      background: var(--panel);
+    }
+    .button.primary { background: var(--cyan); border-color: var(--cyan); color: #031019; }
+    section { padding: 48px 0; }
+    .section-head { max-width: 850px; margin-bottom: 22px; }
+    .section-head p, .caption, .muted { color: var(--muted); }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(4, 1fr); }
+    .card {
+      border: 1px solid rgba(57,199,242,.2);
+      border-radius: 14px;
+      padding: 20px;
+      background: linear-gradient(145deg, rgba(16,35,56,.95), rgba(7,18,29,.95));
+    }
+    .number { color: var(--cyan); font-weight: 800; font-size: 1.5rem; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(72,223,155,.1);
+      border: 1px solid rgba(72,223,155,.35);
+      color: var(--green);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .asset {
+      padding: 20px;
+      border: 1px solid rgba(57,199,242,.22);
+      border-radius: 16px;
+      background: rgba(7,18,29,.9);
+      box-shadow: 0 24px 70px rgba(0,0,0,.25);
+    }
+    .asset + .asset { margin-top: 20px; }
+    .asset-meta { margin-bottom: 15px; }
+    .asset-meta p { margin-bottom: 0; }
+    .label { color: var(--amber); font-weight: 800; }
+    .evolution { display: grid; gap: 12px; }
+    .stage {
+      display: grid;
+      grid-template-columns: 135px 1fr;
+      gap: 18px;
+      padding: 18px;
+      border-left: 3px solid var(--line);
+      background: rgba(11,26,41,.72);
+    }
+    .stage.current { border-left-color: var(--green); }
+    .stage strong { color: var(--cyan); }
+    .callout {
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,116,125,.3);
+      background: rgba(255,116,125,.06);
+    }
+    details {
+      border: 1px solid rgba(57,199,242,.2);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 16px 18px;
+    }
+    details + details { margin-top: 12px; }
+    summary { cursor: pointer; font-weight: 800; }
+    footer { margin-top: 45px; padding: 30px 0 48px; border-top: 1px solid rgba(57,199,242,.16); color: var(--muted); }
+    @media (max-width: 850px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .stage { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .grid { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; justify-content: center; padding: 12px 0; }
+      .hero { padding-top: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap topbar">
+      <div class="brand">AGENTIC STUDIO DIGITAL TWIN</div>
+      <div class="status">Mentor Preview · September 7 MVP</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div class="eyebrow">One production event · four agents · one human decision</div>
+        <h1>AI recommends. Humans decide.</h1>
+        <p class="lede">Agentic Studio Digital Twin is a human-governed multi-agent system for responding to film-production disruptions. The September MVP focuses on one weather event and four agent roles: Research, Scheduling, Budget, and Producer.</p>
+        <div class="honesty"><strong>Current-state note:</strong> The visual material below documents the project’s evolution. It distinguishes the original twelve-agent vision, generated concept imagery, a simulated interface prototype, and the four-agent workflow currently being integrated in code.</div>
+        <nav class="quick-nav" aria-label="Preview navigation">
+          <a class="button primary" href="#quick-review">Start the two-minute review</a>
+          <a class="button" href="#deeper-review">Optional deeper review</a>
+          <a class="button" href="https://github.com/PerdueCo/agentic-cinema" target="_blank" rel="noreferrer">View source repository</a>
+        </nav>
+      </div>
+    </section>
+
+    <section id="quick-review">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Current September MVP</div>
+          <h2>The focused four-agent workflow</h2>
+          <p>One weather disruption moves through four specialized responsibilities. A human remains responsible for the final action.</p>
+        </div>
+        <div class="grid">
+          <article class="card"><div class="number">01</div><h3>Research</h3><p>Uses Parallel Search for grounded, sourced information and Gemini for a decision-ready summary.</p></article>
+          <article class="card"><div class="number">02</div><h3>Scheduling</h3><p>Determines whether affected scenes should proceed, reschedule, or relocate.</p></article>
+          <article class="card"><div class="number">03</div><h3>Budget</h3><p>Assesses the likely financial effect and whether producer sign-off is required.</p></article>
+          <article class="card"><div class="number">04</div><h3>Producer</h3><p>Synthesizes the evidence into one recommendation for human review.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <article class="asset">
+          <div class="asset-meta">
+            <span class="tag">Asset 1 · Primary visual</span>
+            <h2>Target Product Experience — Scene 42 Storyboard</h2>
+            <p><span class="label">Label:</span> Conceptual target experience, not a screenshot of the completed system.</p>
+            <p class="caption">This storyboard connects the landing page, secure access, executive dashboard, weather event, human approval, and updated Digital Twin. Physics and Safety shown here come from an earlier design and remain future extensions or analysis categories—not additional September MVP agents.</p>
+          </div>
+          <img src="assets/01-scene-42-target-experience.png" alt="Scene 42 Agentic Studio Digital Twin target product storyboard">
+        </article>
+
+        <article class="asset">
+          <div class="asset-meta">
+            <span class="tag">Asset 2 · Four seconds</span>
+            <h2>Cinematic Concept Shot — Weather Disruption</h2>
+            <p><span class="label">Label:</span> AI-generated vision asset, not working-application footage.</p>
+            <p class="caption">A film set moves from clear conditions into a storm while Digital Twin telemetry and human approval appear. It establishes the visual idea: the real production changes, AI analyzes the effect, and a person retains control.</p>
+          </div>
+          <video controls playsinline preload="metadata">
+            <source src="assets/02-weather-disruption-concept-shot.mp4" type="video/mp4">
+            Your browser does not support embedded MP4 video.
+          </video>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Project evolution</div>
+          <h2>How the idea became a focused MVP</h2>
+        </div>
+        <div class="evolution">
+          <div class="stage"><strong>Stage 1 · Original vision</strong><span>A broad twelve-agent autonomous movie studio established the long-term direction.</span></div>
+          <div class="stage"><strong>Stage 2 · Scene 42 prototype</strong><span>A single weather event made the user experience concrete: detect risk, analyze impact, recommend action, require human approval, and update the twin.</span></div>
+          <div class="stage current"><strong>Stage 3 · Current MVP</strong><span>The September 7 build is intentionally reduced to Research, Scheduling, Budget, and Producer, followed by human approval and an auditable state change.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="deeper-review">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Optional deeper review</div>
+          <h2>Supporting material</h2>
+          <p>The quick review above is enough to understand the current direction. These longer materials are available when more detail is useful.</p>
+        </div>
+
+        <details>
+          <summary>Asset 3 — Watch the 3:41 interactive interface prototype</summary>
+          <p><span class="label">Label:</span> Recorded dashboard simulation using presentation data; not yet connected to the live four-agent backend.</p>
+          <p class="muted">This walkthrough demonstrates the intended Scene 42 command-center experience, analysis refresh, recommendation, human approval, and visible Digital Twin update.</p>
+          <video controls playsinline preload="metadata">
+            <source src="assets/03-scene-42-interface-prototype-walkthrough.mp4" type="video/mp4">
+            Your browser does not support embedded MP4 video.
+          </video>
+        </details>
+
+        <details>
+          <summary>Asset 4 — Open the original 90-second brainstorm trailer</summary>
+          <p><span class="label">Label:</span> Earlier vision exploration showing the original twelve-agent studio—not the current September MVP scope.</p>
+          <p><a class="button" href="https://perdueco.github.io/agentic-cinema/digital-twin-trailer/" target="_blank" rel="noreferrer">Open the original vision trailer</a></p>
+        </details>
+
+        <details>
+          <summary>Inspect the current code and documentation</summary>
+          <p>The public repository contains the Research, Scheduling, Budget, and Producer agent classes, their typed data contracts, tests, architecture documents, and project decision log.</p>
+          <p><a class="button" href="https://github.com/PerdueCo/agentic-cinema" target="_blank" rel="noreferrer">Open the GitHub repository</a></p>
+        </details>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="callout">
+          <h2>Feedback requested</h2>
+          <ol>
+            <li>Is the four-agent workflow understandable and technically credible?</li>
+            <li>What should be removed or prioritized before the September 7 submission?</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Clarence Perdue Jr. · Agentic Studio Digital Twin · Mentor Preview · Concept assets and simulated telemetry are labeled explicitly.</div>
+  </footer>
+</body>
+</html>

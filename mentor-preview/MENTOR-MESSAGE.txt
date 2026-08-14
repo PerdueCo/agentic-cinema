@@ -1,0 +1,23 @@
+Subject: Short preview of my Agentic Studio Digital Twin project
+
+Hello [Mentor's Name],
+
+I organized a short preview of my Agentic Studio Digital Twin project so you would not have to search through the entire repository.
+
+The project began as a broad twelve-agent studio concept. I have now reduced the September 7 MVP to four agent roles—Research, Scheduling, Budget, and Producer—working through one weather-disruption scenario with a human making the final decision.
+
+The preview distinguishes the original vision, the interface prototype, and the current coded MVP. The quick review should take about two minutes, with the longer walkthrough and repository available only if you want to go deeper.
+
+Preview:
+https://perdueco.github.io/agentic-cinema/mentor-preview/
+
+I would especially value your opinion on two questions:
+
+1. Is the four-agent workflow understandable and technically credible?
+2. What should I remove or prioritize before the September 7 submission?
+
+If the direction interests you, I would also like to discuss whether you might come aboard as a mentor. One focused review would already be valuable, and we could decide afterward whether continued involvement makes sense.
+
+Thank you,
+
+Clarence Perdue Jr.
