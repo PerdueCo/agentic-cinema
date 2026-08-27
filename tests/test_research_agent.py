@@ -29,7 +29,7 @@ async def test_investigate_returns_grounded_finding(monkeypatch):
             )
         ]
     )
-    agent._parallel.beta.search = AsyncMock(return_value=fake_result)
+    agent._parallel.search = AsyncMock(return_value=fake_result)
 
     fake_response = SimpleNamespace(
         text="A storm warning is active near the shoot location; exteriors are at risk."
@@ -51,5 +51,10 @@ async def test_investigate_returns_grounded_finding(monkeypatch):
 
     assert finding.source_url == "https://example.com/weather"
     assert "storm" in finding.summary.lower()
-    agent._parallel.beta.search.assert_called_once()
+    agent._parallel.search.assert_awaited_once()
+    search_kwargs = agent._parallel.search.await_args.kwargs
+    assert search_kwargs["mode"] == "turbo"
+    assert search_kwargs["max_chars_total"] == 6000
+    assert "processor" not in search_kwargs
+    assert "max_results" not in search_kwargs
     agent._gemini.models.generate_content.assert_called_once()

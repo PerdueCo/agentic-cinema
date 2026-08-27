@@ -32,7 +32,7 @@ from src.shared.schemas import ResearchFinding, SceneLocation, WeatherDisruption
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 class ResearchAgent:
@@ -47,7 +47,7 @@ class ResearchAgent:
             api_key=parallel_api_key or os.environ["PARALLEL_API_KEY"]
         )
         self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GEMINI_API_KEY"]
+            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
         )
 
     async def investigate(self, event: WeatherDisruptionEvent) -> ResearchFinding:
@@ -59,11 +59,11 @@ class ResearchAgent:
         )
 
         # --- Parallel Search API call (runtime, not just README mention) ---
-        search_result = await self._parallel.beta.search(
+        search_result = await self._parallel.search(
             objective=query,
             search_queries=[query],
-            processor="base",
-            max_results=3,
+            mode="turbo",
+            max_chars_total=6000,
         )
 
         top_result = search_result.results[0] if search_result.results else None

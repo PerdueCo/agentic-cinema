@@ -14,7 +14,7 @@ Flow:
      RESCHEDULE, or RELOCATE, with a one-sentence rationale.
   3. Returns a ScheduleRecommendation the Budget Agent can price out next.
 
-This agent never invents facts about conditions on the ground itself — it
+This agent never invents facts about conditions on the ground itself â€” it
 only reasons over what the Research Agent already grounded with a real
 source. That separation of concerns (one agent grounds, the next reasons)
 is the pattern the rest of the ecosystem follows.
@@ -40,7 +40,7 @@ from src.shared.schemas import (
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 class SchedulingAgent:
@@ -48,7 +48,7 @@ class SchedulingAgent:
 
     def __init__(self, gemini_api_key: str | None = None) -> None:
         self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GEMINI_API_KEY"]
+            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
         )
 
     def recommend(

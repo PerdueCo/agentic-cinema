@@ -1,5 +1,6 @@
 # Google Cloud AI (required for Stage One eligibility)
 google-genai>=0.3.0
+google-cloud-aiplatform[agent_engines,adk]>=1.112.0
 
 # Parallel track requirement — Search API SDK
 parallel-web>=0.1.0

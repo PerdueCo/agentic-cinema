@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-studio-scene42"
+version = "0.1.0"
+description = "Scene 42 four-agent orchestration for Agentic Studio Digital Twin"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src", "src.*"]

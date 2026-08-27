@@ -10,7 +10,7 @@ Runtime dependency (called, not just referenced):
 This is the agent that closes the loop described in the README's
 Demonstration Story: the Digital Twin receives an event, three agents
 reason about it in sequence, and the Producer Agent turns their combined
-output into a single clear call for a human to approve — rather than
+output into a single clear call for a human to approve â€” rather than
 making the human read three separate agent outputs and synthesize them
 by hand.
 
@@ -38,7 +38,7 @@ from src.shared.schemas import (
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 class ProducerAgent:
@@ -46,7 +46,7 @@ class ProducerAgent:
 
     def __init__(self, gemini_api_key: str | None = None) -> None:
         self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GEMINI_API_KEY"]
+            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
         )
 
     def recommend(
@@ -68,9 +68,9 @@ class ProducerAgent:
             f"Location: {event.location.name}\n"
             f"Research finding: {finding.summary}\n"
             f"Scheduling decision: {schedule.suggested_action.upper()} "
-            f"— {schedule.reasoning}\n"
+            f"â€” {schedule.reasoning}\n"
             f"Budget assessment: {budget.recommended_action.upper()} "
-            f"({budget.estimated_cost_impact}) — {budget.reasoning}"
+            f"({budget.estimated_cost_impact}) â€” {budget.reasoning}"
         )
 
         # --- Gemini call (runtime, not just README mention) -----------------

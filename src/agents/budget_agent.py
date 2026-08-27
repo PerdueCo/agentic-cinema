@@ -18,7 +18,7 @@ This agent is deliberately honest about its limits: without real day-rate
 or crew-size data wired in yet, its cost estimate is Gemini's informed
 judgment from the finding text alone, not a calculation from real numbers.
 The `estimated_cost_impact` field stays a descriptive string for exactly
-that reason — see the docstring on BudgetAssessment in schemas.py.
+that reason â€” see the docstring on BudgetAssessment in schemas.py.
 
 Run directly for a smoke test, chaining off live Research + Scheduling
 Agent calls:
@@ -43,7 +43,7 @@ from src.shared.schemas import (
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 class BudgetAgent:
@@ -51,7 +51,7 @@ class BudgetAgent:
 
     def __init__(self, gemini_api_key: str | None = None) -> None:
         self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GEMINI_API_KEY"]
+            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
         )
 
     def assess(
