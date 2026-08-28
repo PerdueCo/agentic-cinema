@@ -22,6 +22,13 @@ async def run_scene42_workflow(event_data: dict[str, Any]) -> dict[str, Any]:
     result_adapter = TypeAdapter(Scene42WorkflowResult)
     return result_adapter.dump_python(result, mode="json")
 
+def configure_model_location() -> None:
+    model_location = os.getenv("SCENE42_MODEL_LOCATION")
+    if model_location:
+        os.environ["GOOGLE_CLOUD_LOCATION"] = model_location
+
+configure_model_location()
+
 # Define the root Agent
 root_agent = Agent(
     name="scene_42_root_agent",

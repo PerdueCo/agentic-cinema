@@ -36,8 +36,7 @@ def deploy():
         extra_packages=["src"],
         env_vars={
             "GOOGLE_GENAI_USE_VERTEXAI": "true",
-            "GOOGLE_CLOUD_PROJECT": PROJECT_ID,
-            "GOOGLE_CLOUD_LOCATION": MODEL_LOCATION,
+            "SCENE42_MODEL_LOCATION": MODEL_LOCATION,
             "GEMINI_MODEL": "gemini-3.6-flash",
             "PARALLEL_API_KEY": SecretRef(
                 secret=PARALLEL_SECRET_NAME,

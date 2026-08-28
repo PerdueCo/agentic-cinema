@@ -45,8 +45,9 @@ def test_deploy_arguments(mock_create, mock_create_adk_app, mock_init):
     # Verify env_vars
     env_vars = kwargs["env_vars"]
     assert env_vars["GOOGLE_GENAI_USE_VERTEXAI"] == "true"
-    assert env_vars["GOOGLE_CLOUD_PROJECT"] == "gen-lang-client-0908811561"
-    assert env_vars["GOOGLE_CLOUD_LOCATION"] == "global"
+    assert "GOOGLE_CLOUD_PROJECT" not in env_vars
+    assert "GOOGLE_CLOUD_LOCATION" not in env_vars
+    assert env_vars["SCENE42_MODEL_LOCATION"] == "global"
     assert env_vars["GEMINI_MODEL"] == "gemini-3.6-flash"
 
     # Verify SecretRef

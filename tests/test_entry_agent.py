@@ -94,3 +94,13 @@ def test_create_adk_app_is_deferred():
 
     mock_adk_app.assert_called_once_with(agent=root_agent)
     assert result is mock_adk_app.return_value
+
+
+def test_configure_model_location(monkeypatch):
+    monkeypatch.setenv("SCENE42_MODEL_LOCATION", "global")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+    src.entry_agent.configure_model_location()
+
+    import os
+    assert os.environ.get("GOOGLE_CLOUD_LOCATION") == "global"
