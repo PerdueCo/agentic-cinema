@@ -9,8 +9,9 @@ straight from Gemini's synthesis of all three inputs.
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.agents.producer_agent import ProducerAgent
 from src.shared.schemas import (
@@ -22,9 +23,20 @@ from src.shared.schemas import (
 )
 
 
-def test_recommend_synthesizes_all_three_inputs_via_gemini():
-    agent = ProducerAgent(gemini_api_key="test")
+def test_producer_agent_default_vertex_client(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east1")
+    with patch("google.genai.Client") as mock_client_class:
+        _ = ProducerAgent()
+        mock_client_class.assert_called_once_with(
+            vertexai=True,
+            project="test-project",
+            location="us-east1",
+        )
 
+
+def test_recommend_synthesizes_all_three_inputs_via_gemini():
+    mock_client = MagicMock()
     fake_response = SimpleNamespace(
         text=(
             "Reschedule and escalate budget for sign-off\n"
@@ -33,7 +45,9 @@ def test_recommend_synthesizes_all_three_inputs_via_gemini():
             "approval given the added cost."
         )
     )
-    agent._gemini.models.generate_content = MagicMock(return_value=fake_response)
+    mock_client.models.generate_content.return_value = fake_response
+
+    agent = ProducerAgent(gemini_client=mock_client)
 
     location = SceneLocation(
         location_id="loc-001",
@@ -69,4 +83,4 @@ def test_recommend_synthesizes_all_three_inputs_via_gemini():
     assert "reschedule" in recommendation.final_decision.lower()
     assert "storm" in recommendation.summary.lower()
     assert "approval" in recommendation.rationale.lower()
-    agent._gemini.models.generate_content.assert_called_once()
+    mock_client.models.generate_content.assert_called_once()

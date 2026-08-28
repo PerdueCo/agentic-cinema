@@ -127,10 +127,15 @@ def seed_events():
 
 @app.get("/api/health")
 def health():
+    mode = (
+        "live"
+        if os.getenv("ALLOW_LIVE_AGENTS", "false").lower() == "true"
+        else "demo"
+    )
     return {
         "status": "ok",
-        "mode": "live" if os.getenv("GOOGLE_API_KEY") else "demo",
-        "gemini_configured": bool(os.getenv("GOOGLE_API_KEY")),
+        "mode": mode,
+        "gemini_configured": bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
         "parallel_configured": bool(os.getenv("PARALLEL_API_KEY")),
     }
 
@@ -199,7 +204,7 @@ async def analyze_scene():
     if live_enabled:
         missing_keys = [
             name
-            for name in ("GOOGLE_API_KEY", "PARALLEL_API_KEY")
+            for name in ("GOOGLE_CLOUD_PROJECT", "PARALLEL_API_KEY")
             if not os.getenv(name)
         ]
         if missing_keys:

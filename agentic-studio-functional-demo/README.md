@@ -100,12 +100,19 @@ The backend already includes `POST /api/research` as the integration seam.
 
 ## Enable Gemini next
 
-Google's current Python SDK package is `google-genai`. Add:
+Google's current Python SDK package is `google-genai`. To enable Gemini via Vertex AI, configure Application Default Credentials (ADC) by setting:
 
-```env
-GOOGLE_API_KEY=your_key_here
+~~~env
+GOOGLE_CLOUD_PROJECT=your_project_id
+GOOGLE_CLOUD_LOCATION=global
 GEMINI_MODEL=gemini-3.6-flash
-```
+~~~
+
+Make sure you have authenticated your environment:
+
+~~~bash
+gcloud auth application-default login
+~~~
 
 The next development step is to move the Producer recommendation explanation and selected agent reasoning into a Gemini service while keeping physics/safety thresholds deterministic and auditable.
 

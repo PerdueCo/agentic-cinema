@@ -9,20 +9,34 @@ event's affected scene IDs through unchanged.
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.agents.scheduling_agent import SchedulingAgent
 from src.shared.schemas import ResearchFinding, SceneLocation, WeatherDisruptionEvent
 
 
-def test_recommend_returns_action_and_reasoning_from_gemini():
-    agent = SchedulingAgent(gemini_api_key="test")
+def test_scheduling_agent_default_vertex_client(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east1")
+    with patch("google.genai.Client") as mock_client_class:
+        _ = SchedulingAgent()
+        mock_client_class.assert_called_once_with(
+            vertexai=True,
+            project="test-project",
+            location="us-east1",
+        )
 
+
+def test_recommend_returns_action_and_reasoning_from_gemini():
+    mock_client = MagicMock()
     fake_response = SimpleNamespace(
         text="RESCHEDULE\nExterior shots are unsafe during an active storm warning."
     )
-    agent._gemini.models.generate_content = MagicMock(return_value=fake_response)
+    mock_client.models.generate_content.return_value = fake_response
+
+    agent = SchedulingAgent(gemini_client=mock_client)
 
     location = SceneLocation(
         location_id="loc-001",
@@ -48,4 +62,4 @@ def test_recommend_returns_action_and_reasoning_from_gemini():
     assert recommendation.suggested_action == "reschedule"
     assert "unsafe" in recommendation.reasoning.lower()
     assert recommendation.affected_scene_ids == ["scene-014", "scene-015"]
-    agent._gemini.models.generate_content.assert_called_once()
+    mock_client.models.generate_content.assert_called_once()

@@ -63,7 +63,7 @@ def test_live_mode_calls_orchestrator_and_preserves_human_boundary(
     )
 
     monkeypatch.setenv("ALLOW_LIVE_AGENTS", "true")
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-gcp-project")
     monkeypatch.setenv("PARALLEL_API_KEY", "test-parallel-key")
     monkeypatch.setattr(
         main_module,

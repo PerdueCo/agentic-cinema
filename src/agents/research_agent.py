@@ -41,14 +41,19 @@ class ResearchAgent:
     def __init__(
         self,
         parallel_api_key: str | None = None,
-        gemini_api_key: str | None = None,
+        gemini_client: genai.Client | None = None,
     ) -> None:
         self._parallel = AsyncParallel(
             api_key=parallel_api_key or os.environ["PARALLEL_API_KEY"]
         )
-        self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
-        )
+        if gemini_client is not None:
+            self._gemini = gemini_client
+        else:
+            self._gemini = genai.Client(
+                vertexai=True,
+                project=os.environ["GOOGLE_CLOUD_PROJECT"],
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+            )
 
     async def investigate(self, event: WeatherDisruptionEvent) -> ResearchFinding:
         """Run a live Parallel search and summarize it with Gemini."""

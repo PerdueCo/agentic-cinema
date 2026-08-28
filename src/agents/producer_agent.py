@@ -44,10 +44,15 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 class ProducerAgent:
     """Turns three upstream agent outputs into one human-facing call."""
 
-    def __init__(self, gemini_api_key: str | None = None) -> None:
-        self._gemini = genai.Client(
-            api_key=gemini_api_key or os.environ["GOOGLE_API_KEY"]
-        )
+    def __init__(self, gemini_client: genai.Client | None = None) -> None:
+        if gemini_client is not None:
+            self._gemini = gemini_client
+        else:
+            self._gemini = genai.Client(
+                vertexai=True,
+                project=os.environ["GOOGLE_CLOUD_PROJECT"],
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+            )
 
     def recommend(
         self,

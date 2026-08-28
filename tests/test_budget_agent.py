@@ -8,16 +8,28 @@ cost range, action, and reasoning came straight from Gemini's response.
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.agents.budget_agent import BudgetAgent
 from src.shared.schemas import ScheduleRecommendation, SceneLocation, WeatherDisruptionEvent
 
 
-def test_assess_returns_cost_range_action_and_reasoning_from_gemini():
-    agent = BudgetAgent(gemini_api_key="test")
+def test_budget_agent_default_vertex_client(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east1")
+    with patch("google.genai.Client") as mock_client_class:
+        _ = BudgetAgent()
+        mock_client_class.assert_called_once_with(
+            vertexai=True,
+            project="test-project",
+            location="us-east1",
+        )
 
+
+def test_assess_returns_cost_range_action_and_reasoning_from_gemini():
+    mock_client = MagicMock()
     fake_response = SimpleNamespace(
         text=(
             "$3,000-$5,000\n"
@@ -25,7 +37,9 @@ def test_assess_returns_cost_range_action_and_reasoning_from_gemini():
             "Rescheduling a two-scene exterior shoot requires producer sign-off."
         )
     )
-    agent._gemini.models.generate_content = MagicMock(return_value=fake_response)
+    mock_client.models.generate_content.return_value = fake_response
+
+    agent = BudgetAgent(gemini_client=mock_client)
 
     location = SceneLocation(
         location_id="loc-001",
@@ -50,4 +64,4 @@ def test_assess_returns_cost_range_action_and_reasoning_from_gemini():
     assert assessment.estimated_cost_impact == "$3,000-$5,000"
     assert assessment.recommended_action == "escalate"
     assert "sign-off" in assessment.reasoning.lower()
-    agent._gemini.models.generate_content.assert_called_once()
+    mock_client.models.generate_content.assert_called_once()
