@@ -54,7 +54,7 @@ def test_deploy_arguments(mock_create, mock_create_adk_app, mock_init):
     secret_ref = env_vars["PARALLEL_API_KEY"]
     assert isinstance(secret_ref, SecretRef)
     assert secret_ref.secret == "scene42-parallel-api-key"
-    assert secret_ref.version == "1"
+    assert secret_ref.version == "2"
 
     # Verify instances and service account
     assert kwargs["service_account"] == "scene42-agent-engine@gen-lang-client-0908811561.iam.gserviceaccount.com"

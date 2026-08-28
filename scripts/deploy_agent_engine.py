@@ -11,7 +11,7 @@ MODEL_LOCATION = "global"
 STAGING_BUCKET = "gs://agentic-cinema-scene42-agent-engine-318775065448"
 RUNTIME_SERVICE_ACCOUNT = "scene42-agent-engine@gen-lang-client-0908811561.iam.gserviceaccount.com"
 PARALLEL_SECRET_NAME = "scene42-parallel-api-key"
-PARALLEL_SECRET_VERSION = "1"
+PARALLEL_SECRET_VERSION = "2"
 
 def deploy():
     """Initializes Vertex AI and deploys the Agent Engine resource."""
