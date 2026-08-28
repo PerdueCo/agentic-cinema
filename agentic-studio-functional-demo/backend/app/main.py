@@ -1,20 +1,20 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import os
+from dataclasses import asdict
 from datetime import datetime, timezone
+import json
+import os
 from typing import Literal
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
+import vertexai
+from vertexai import agent_engines
 
-from src.agents.budget_agent import BudgetAgent
-from src.agents.producer_agent import ProducerAgent
-from src.agents.research_agent import ResearchAgent
-from src.agents.scheduling_agent import SchedulingAgent
-from src.orchestrator import Scene42Orchestrator
+from src.orchestrator import Scene42WorkflowResult
 from src.shared.schemas import SceneLocation, WeatherDisruptionEvent
 
 load_dotenv()
@@ -43,7 +43,7 @@ def now_iso() -> str:
 STATE = {
     "scene": {
         "id": "scene-42",
-        "name": "Scene 42 â€” Exterior",
+        "name": "Scene 42 — Exterior",
         "location": "Downtown Atlanta",
         "status": "AT_RISK",
         "stage": "Exterior",
@@ -137,6 +137,9 @@ def health():
         "mode": mode,
         "gemini_configured": bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
         "parallel_configured": bool(os.getenv("PARALLEL_API_KEY")),
+        "agent_engine_configured": bool(
+            os.getenv("SCENE42_AGENT_ENGINE_RESOURCE_NAME")
+        ),
     }
 
 
@@ -155,14 +158,80 @@ def dashboard():
     }
 
 
-def build_live_orchestrator() -> Scene42Orchestrator:
-    """Create the real four-agent workflow using configured API keys."""
-    return Scene42Orchestrator(
-        research_agent=ResearchAgent(),
-        scheduling_agent=SchedulingAgent(),
-        budget_agent=BudgetAgent(),
-        producer_agent=ProducerAgent(),
+def get_managed_agent_engine():
+    """Initialize Vertex AI and retrieve the managed Agent Engine."""
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
+    location = os.getenv("SCENE42_AGENT_ENGINE_LOCATION", "us-central1")
+    resource_name = os.getenv("SCENE42_AGENT_ENGINE_RESOURCE_NAME")
+    if not resource_name:
+        raise ValueError(
+            "SCENE42_AGENT_ENGINE_RESOURCE_NAME environment variable is required"
+        )
+
+    vertexai.init(project=project, location=location)
+    return agent_engines.get(resource_name)
+
+
+async def run_managed_scene42_workflow(
+    event: WeatherDisruptionEvent,
+) -> Scene42WorkflowResult:
+    """Serialize event, stream via managed engine, and validate output."""
+    engine = get_managed_agent_engine()
+    serialized_event = json.dumps(asdict(event))
+    message = (
+        "Please execute the fixed Research, Scheduling, Budget, and Producer "
+        "workflow while preserving the human approval boundary for this weather "
+        f"disruption event: {serialized_event}"
     )
+    user_id = f"user-{uuid4()}"
+
+    def read_field(val, field, default=None):
+        if isinstance(val, dict):
+            return val.get(field, default)
+        return getattr(val, field, default)
+
+    workflow_result_data = None
+
+    async for stream_event in engine.async_stream_query(
+        message=message, user_id=user_id
+    ):
+        # Detect confirmed managed error shapes
+        error_code = read_field(stream_event, "error_code")
+        if error_code is not None:
+            raise RuntimeError(f"Managed error: {error_code}")
+        code = read_field(stream_event, "code")
+        if code is not None:
+            raise RuntimeError(f"Managed error: {code}")
+
+        # Extract content.parts[].function_response.response
+        content = read_field(stream_event, "content")
+        if content is not None:
+            parts = read_field(content, "parts")
+            if parts is not None:
+                for part in parts:
+                    func_resp = read_field(part, "function_response")
+                    if func_resp is not None:
+                        resp = read_field(func_resp, "response")
+                        if resp is not None:
+                            workflow_result_data = resp
+
+    if workflow_result_data is None:
+        raise RuntimeError(
+            "No workflow function response returned from the managed agent engine."
+        )
+
+    # Recursively convert any protobuf struct/map containers to plain python dicts
+    def to_dict(obj):
+        if hasattr(obj, "items"):
+            return {k: to_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [to_dict(x) for x in obj]
+        return obj
+
+    plain_dict = to_dict(workflow_result_data)
+    return TypeAdapter(Scene42WorkflowResult).validate_python(plain_dict)
 
 
 def build_scene42_event() -> WeatherDisruptionEvent:
@@ -204,7 +273,7 @@ async def analyze_scene():
     if live_enabled:
         missing_keys = [
             name
-            for name in ("GOOGLE_CLOUD_PROJECT", "PARALLEL_API_KEY")
+            for name in ("GOOGLE_CLOUD_PROJECT", "SCENE42_AGENT_ENGINE_RESOURCE_NAME")
             if not os.getenv(name)
         ]
         if missing_keys:
@@ -217,9 +286,7 @@ async def analyze_scene():
             )
 
         try:
-            workflow = await build_live_orchestrator().run(
-                build_scene42_event()
-            )
+            workflow = await run_managed_scene42_workflow(build_scene42_event())
         except Exception as exc:
             append_event(
                 "error",
