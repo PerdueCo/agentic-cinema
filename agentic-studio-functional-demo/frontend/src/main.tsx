@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertTriangle, BrainCircuit, CheckCircle2, CloudRain, Gauge,
+  BrainCircuit, CheckCircle2, CloudRain, Gauge,
   LockKeyhole, Play, RefreshCcw, ShieldCheck, Sparkles, UserCheck,
   Wind, XCircle, ArrowRight, Activity, Database, Clock3
 } from 'lucide-react';
@@ -15,8 +15,9 @@ const money = (v:number) => new Intl.NumberFormat('en-US', {style:'currency', cu
 function App(){
   const [screen, setScreen] = useState<'landing'|'auth'|'dashboard'>('landing');
   const [data, setData] = useState<Dashboard|null>(null);
+  const [analysis, setAnalysis] = useState<any|null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('Demo mode: no API keys required.');
+  const [message, setMessage] = useState('Connecting to Digital Twin API...');
 
   const load = async () => {
     try {
@@ -29,10 +30,24 @@ function App(){
   useEffect(()=>{ load(); },[]);
 
   const analyze = async () => {
-    setBusy(true); setMessage('Agents are analyzing Scene 42...');
-    await fetch(`${API}/api/scenes/42/analyze`, {method:'POST'});
-    await new Promise(r=>setTimeout(r,700));
-    await load(); setBusy(false); setMessage('Analysis complete. Human decision required.');
+    setBusy(true);
+    setMessage('Agents are analyzing Scene 42...');
+    try {
+      const res = await fetch(`${API}/api/scenes/42/analyze`, { method: 'POST' });
+      if (!res.ok) {
+        setMessage('Analysis failed. Please try again.');
+        return;
+      }
+      const analysisData = await res.json();
+      setAnalysis(analysisData);
+      await new Promise(r => setTimeout(r, 700));
+      await load();
+      setMessage('Analysis complete. Human decision required.');
+    } catch {
+      setMessage('Analysis failed. Unable to connect to server.');
+    } finally {
+      setBusy(false);
+    }
   };
   const decide = async (decision:'approve'|'reject') => {
     setBusy(true);
@@ -45,13 +60,14 @@ function App(){
     await load(); setBusy(false);
   };
   const reset = async () => {
+    setAnalysis(null);
     await fetch(`${API}/api/demo/reset`, {method:'POST'}); await load();
     setMessage('Demo reset. Scene 42 is awaiting approval again.');
   };
 
   if(screen==='landing') return <Landing onLaunch={()=>setScreen('auth')} />;
   if(screen==='auth') return <Auth onSignIn={()=>setScreen('dashboard')} onBack={()=>setScreen('landing')} />;
-  return <DashboardView data={data} busy={busy} message={message} analyze={analyze} decide={decide} reset={reset} />;
+  return <DashboardView data={data} analysis={analysis} busy={busy} message={message} analyze={analyze} decide={decide} reset={reset} />;
 }
 
 function Landing({onLaunch}:{onLaunch:()=>void}){
@@ -98,7 +114,7 @@ function Auth({onSignIn,onBack}:{onSignIn:()=>void,onBack:()=>void}){
   </main>
 }
 
-function DashboardView({data,busy,message,analyze,decide,reset}:{data:Dashboard|null,busy:boolean,message:string,analyze:()=>void,decide:(d:'approve'|'reject')=>void,reset:()=>void}){
+function DashboardView({data,analysis,busy,message,analyze,decide,reset}:{data:Dashboard|null,analysis:any|null,busy:boolean,message:string,analyze:()=>void,decide:(d:'approve'|'reject')=>void,reset:()=>void}){
   if(!data) return <main className="page centered"><div className="spinner"></div><p>Connecting to Digital Twin API...</p></main>;
   const pending = data.approval.status==='PENDING';
   const approved = data.approval.status==='APPROVE';
@@ -119,22 +135,22 @@ function DashboardView({data,busy,message,analyze,decide,reset}:{data:Dashboard|
         </div>
         <div className="overview-grid">
           <section className="panel weather-card"><div className="card-head"><span>WEATHER EVENT IMPACTING PRODUCTION</span><b>HIGH IMPACT</b></div><h3>{data.scene.name}</h3><p>{data.scene.location}</p><div className="weather-stats"><CloudRain/><div><strong>Heavy Rain</strong><span>Wind {data.weather.wind_mph} mph • Lightning {data.weather.lightning_risk}</span></div></div><div className="timeline"><i></i><i></i><i className="hot"></i><i className="hot"></i><i></i><i></i></div></section>
-          <section className="panel recommendation"><span>AI RECOMMENDATION</span><h3>Move Scene 42 to Stage B</h3><ul>{data.recommendation.reasons.slice(0,3).map((r:string)=><li key={r}><CheckCircle2 size={14}/>{r}</li>)}</ul><button className="primary wide" onClick={analyze} disabled={busy}>{busy?'Analyzing...':'Run / Refresh Analysis'}</button></section>
+          <section className="panel recommendation"><span>AI RECOMMENDATION</span><h3>{data.recommendation.action}</h3><ul>{data.recommendation.reasons.slice(0,3).map((r:string)=><li key={r}><CheckCircle2 size={14}/>{r}</li>)}</ul><button className="primary wide" onClick={analyze} disabled={busy}>{busy?'Analyzing...':'Run / Refresh Analysis'}</button></section>
           <section className="panel health"><span>PRODUCTION HEALTH</span><div className="health-ring">{data.kpis.production_health}%</div><small>Schedule 91% • Budget 92% • Resources 94%</small></section>
-          <section className="panel activity"><span>AI AGENT ACTIVITY</span><p>Research Agent — retrieved weather data</p><p>Physics Agent — impact analysis complete</p><p>Safety Agent — risk evaluation complete</p><p>Producer Agent — recommendation ready</p></section>
+          <section className="panel activity"><span>AI AGENT ACTIVITY</span><p>Research Agent — retrieved weather data</p><p>Scheduling Agent — impact analysis complete</p><p>Budget Agent — cost impact analysis complete</p><p>Producer Agent — recommendation ready</p></section>
         </div>
 
         <div className="flow-title"><h2>HUMAN IN THE LOOP DECISION FLOW — SCENE 42 WEATHER EVENT</h2><button className="ghost" onClick={reset}><RefreshCcw size={15}/> Reset Demo</button></div>
         <section className="flow">
           <Step n="1" title="DETECT & INGEST" icon={<CloudRain/>}><Agent name="Research Agent" sub="Parallel Search API"/><div className="mini-weather"><strong>Weather Data Retrieved</strong><span>Heavy rain</span><span>Wind: 32 mph</span><span>Lightning: High</span><span>Visibility: 2 mi</span></div><Metric label="Confidence" value="92%"/></Step>
           <Connector/>
-          <Step n="2" title="PHYSICS ANALYSIS" icon={<Wind/>}><Agent name="Physics Agent" sub="Environmental Impact Model"/><div className="risk-list"><Risk label="Wind Load" value="HIGH"/><Risk label="Crane Stability" value="MEDIUM"/><Risk label="Surface Condition" value="WET"/><Risk label="Electrical Exposure" value="MEDIUM"/></div><Done/></Step>
+          <Step n="2" title="SCHEDULING ASSESSMENT" icon={<Wind/>}><Agent name="Scheduling Agent" sub="Schedule Impact"/>{analysis ? (<div className="mini-weather"><strong>{analysis.evidence?.scheduling?.action || "Awaiting analysis"}</strong><span>{analysis.evidence?.scheduling?.reasoning || "Schedule impact has been reviewed."}</span></div>) : (<div className="mini-weather"><strong>Schedule Impact</strong><span>{data.recommendation?.reasons?.[1] || "Schedule impact reviewed."}</span></div>)}<Done/></Step>
           <Connector/>
-          <Step n="3" title="SAFETY ASSESSMENT" icon={<ShieldCheck/>}><Agent name="Safety Agent" sub="Risk & Compliance"/><div className="hazard"><AlertTriangle size={44}/><strong>HIGH RISK</strong></div><div className="risk-list"><Risk label="Wind Exposure" value="HIGH"/><Risk label="Electrical Hazards" value="HIGH"/><Risk label="Slip Hazard" value="HIGH"/><Risk label="Equipment Risk" value="MEDIUM"/><Risk label="Crew Exposure" value="HIGH"/></div></Step>
+          <Step n="3" title="BUDGET ASSESSMENT" icon={<ShieldCheck/>}><Agent name="Budget Agent" sub="Cost Impact"/>{analysis ? (<div className="mini-weather"><strong>{analysis.evidence?.budget?.estimated_cost || "Awaiting analysis"} — {analysis.evidence?.budget?.action || "Awaiting analysis"}</strong><span>{analysis.evidence?.budget?.reasoning || "Cost impact has been reviewed."}</span></div>) : (<div className="mini-weather"><strong>Cost Impact</strong><span>{data.recommendation?.reasons?.[2] || "Cost impact reviewed."}</span></div>)}</Step>
           <Connector/>
-          <Step n="4" title="PRODUCER RECOMMENDATION" icon={<BrainCircuit/>}><Agent name="Producer Agent" sub="Synthesis & Recommendation"/><div className="recommended">MOVE SCENE 42<br/>TO STAGE B</div><ul className="compact">{data.recommendation.reasons.map((r:string)=><li key={r}>✓ {r}</li>)}</ul><div className="impact"><span>Schedule <b>+2 hrs</b></span><span>Budget <b>+$11,700</b></span><span>Safety <b>LOW</b></span></div></Step>
+          <Step n="4" title="PRODUCER RECOMMENDATION" icon={<BrainCircuit/>}><Agent name="Producer Agent" sub="Synthesis & Recommendation"/><div className="recommended">{data.recommendation.action}</div><ul className="compact">{data.recommendation.reasons.map((r:string)=><li key={r}>✓ {r}</li>)}</ul><div className="impact"><span>Schedule <b>{analysis?.evidence?.scheduling?.action || "Awaiting analysis"}</b></span><span>Budget <b>{analysis?.evidence?.budget?.estimated_cost || "Awaiting analysis"}</b></span><span>Safety <b>Human review</b></span></div></Step>
           <Connector/>
-          <Step n="5" title="HUMAN APPROVAL" icon={<UserCheck/>} hot={pending}><div className="human"><UserCheck size={42}/><strong>{pending?'Producer Decision Required':approved?'Approved':'Rejected'}</strong></div><div className="decision-summary"><span>Decision</span><b>Move Scene 42 to Stage B</b><div className="impact"><span>Schedule <b>+2 hrs</b></span><span>Budget <b>+$11,700</b></span><span>Safety <b>LOW</b></span></div></div><div className="decision-actions"><button className="reject" onClick={()=>decide('reject')} disabled={!pending||busy}><XCircle size={17}/> Reject</button><button className="approve" onClick={()=>decide('approve')} disabled={!pending||busy}><CheckCircle2 size={17}/> Approve</button></div></Step>
+          <Step n="5" title="HUMAN APPROVAL" icon={<UserCheck/>} hot={pending}><div className="human"><UserCheck size={42}/><strong>{pending?'Producer Decision Required':approved?'Approved':'Rejected'}</strong></div><div className="decision-summary"><span>Decision</span><b>{data.recommendation.action}</b><div className="impact"><span>Schedule <b>{analysis?.evidence?.scheduling?.action || "Awaiting analysis"}</b></span><span>Budget <b>{analysis?.evidence?.budget?.estimated_cost || "Awaiting analysis"}</b></span><span>Safety <b>Human review</b></span></div></div><div className="decision-actions"><button className="reject" onClick={()=>decide('reject')} disabled={!pending||busy}><XCircle size={17}/> Reject</button><button className="approve" onClick={()=>decide('approve')} disabled={!pending||busy}><CheckCircle2 size={17}/> Approve</button></div></Step>
           <Connector/>
           <Step n="6" title="DIGITAL TWIN UPDATED" icon={<Database/>}><div className="twin-update"><strong>Scene 42 Update Propagated</strong><p>Location <b>{data.digital_twin.location}</b></p><p>Schedule <b>{data.digital_twin.schedule}</b></p><p>Budget <b>{data.digital_twin.budget}</b></p><p>Crew <b>{data.digital_twin.crew}</b></p><p>Equipment <b>{data.digital_twin.equipment}</b></p><p>Safety <b>{data.digital_twin.safety}</b></p></div><small>Event history contains {data.events.length} recent events.</small></Step>
         </section>
@@ -149,7 +165,6 @@ function Kpi({label,value,warn}:{label:string,value:any,warn?:boolean}){return <
 function Step({n,title,icon,children,hot}:{n:string,title:string,icon:any,children:any,hot?:boolean}){return <article className={`step panel ${hot?'hot-step':''}`}><header><span className="num">{n}</span>{icon}<b>{title}</b></header>{children}</article>}
 function Connector(){return <div className="connector"><ArrowRight size={18}/></div>}
 function Agent({name,sub}:{name:string,sub:string}){return <div className="agent"><Sparkles size={19}/><div><b>{name}</b><span>{sub}</span></div></div>}
-function Risk({label,value}:{label:string,value:string}){return <p><span>{label}</span><b className={value==='HIGH'?'danger':value==='MEDIUM'?'medium':''}>{value}</b></p>}
 function Metric({label,value}:{label:string,value:string}){return <div className="metric"><span>{label}</span><b>{value}</b></div>}
 function Done(){return <div className="done"><CheckCircle2 size={16}/> Analysis Complete</div>}
 
