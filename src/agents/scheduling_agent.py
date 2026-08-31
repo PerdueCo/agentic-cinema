@@ -61,15 +61,23 @@ class SchedulingAgent:
     ) -> ScheduleRecommendation:
         """Decide PROCEED / RESCHEDULE / RELOCATE for the affected scenes."""
         scene_ids = event.location.scene_ids
+
+        # Include event.condition, event.raw_payload, and finding in the Gemini prompt.
+        # Treat WeatherDisruptionEvent and raw_payload as authoritative, Parallel as supporting context.
         prompt = (
-            "You are a film production Scheduling Agent. Given a grounded "
-            "research finding, decide whether the crew should PROCEED, "
-            "RESCHEDULE, or RELOCATE for the affected scenes. Respond with "
-            "the decision word alone on the first line, then a one-sentence "
-            "rationale on the second line. Nothing else.\n\n"
+            "You are a film production Scheduling Agent. Given an authoritative "
+            "production observation and supporting research, decide whether "
+            "the crew should PROCEED, RESCHEDULE, or RELOCATE for the affected scenes. "
+            "Respond with the decision word alone on the first line, then a "
+            "one-sentence rationale on the second line. Nothing else.\n\n"
+            "Note: The WeatherDisruptionEvent and its raw payload represent "
+            "authoritative production observations. The Parallel research finding "
+            "provides supporting external context.\n\n"
             f"Location: {event.location.name}\n"
             f"Affected scenes: {', '.join(scene_ids) or 'none listed'}\n"
-            f"Finding: {finding.summary}"
+            f"Event Condition (Authoritative): {event.condition}\n"
+            f"Event Raw Payload (Authoritative): {event.raw_payload}\n"
+            f"Parallel Research Finding (Supporting): {finding.summary}"
         )
 
         # --- Gemini call (runtime, not just README mention) -----------------
@@ -80,6 +88,39 @@ class SchedulingAgent:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         action = lines[0].lower() if lines else "proceed"
         reasoning = lines[1] if len(lines) > 1 else text
+
+        # Deterministic check for authoritative severe weather disruption
+        is_severe = False
+        cond_lower = (event.condition or "").lower()
+        if "severe weather" in cond_lower or "severe storm" in cond_lower:
+            is_severe = True
+
+        raw_payload = event.raw_payload or {}
+
+        # Rain check (heavy, case-insensitive)
+        rain_val = raw_payload.get("rain")
+        if rain_val and str(rain_val).lower() == "heavy":
+            is_severe = True
+
+        # Wind check (wind_mph is at least 30)
+        wind_val = raw_payload.get("wind_mph")
+        if wind_val is not None:
+            try:
+                if float(wind_val) >= 30:
+                    is_severe = True
+            except (ValueError, TypeError):
+                pass
+
+        # Lightning check (lightning_risk equals "high", case-insensitive)
+        lightning_val = raw_payload.get("lightning_risk")
+        if lightning_val and str(lightning_val).lower() == "high":
+            is_severe = True
+
+        # Fail-safe check: Severe events must never proceed or output unexpected actions.
+        # Override any non-relocate/non-reschedule actions with RELOCATE.
+        if is_severe and action not in {"relocate", "reschedule"}:
+            action = "relocate"
+            reasoning = f"Evidence conflict: {reasoning}"
 
         recommendation = ScheduleRecommendation(
             affected_scene_ids=scene_ids,

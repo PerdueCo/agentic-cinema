@@ -88,6 +88,13 @@ class ProducerAgent:
         summary = lines[1] if len(lines) > 1 else text
         rationale = lines[2] if len(lines) > 2 else summary
 
+        # Standardized final decision override based on scheduling action
+        suggested_action = (schedule.suggested_action or "").lower()
+        if suggested_action == "relocate":
+            final_decision = "Relocate production"
+        elif suggested_action == "reschedule":
+            final_decision = "Reschedule production"
+
         recommendation = ProducerRecommendation(
             final_decision=final_decision,
             summary=summary,
