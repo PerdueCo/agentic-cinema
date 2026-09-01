@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
@@ -234,23 +235,41 @@ async def run_managed_scene42_workflow(
     return TypeAdapter(Scene42WorkflowResult).validate_python(plain_dict)
 
 
+# Historical event inputs for a FICTIONAL production replay, not set measurements.
+# Reference URLs identify the intended event; they are not runtime search results.
+SCENE42_HISTORICAL_METADATA = {
+    "event_date": "2008-03-14",
+    "event_time_local": "9:38 PM",
+    "area": "Downtown Atlanta",
+    "city": "Atlanta",
+    "state": "Georgia",
+    "country": "USA",
+    "tornado_rating": "EF2",
+    "estimated_max_wind_mph": 130,
+    "reference_urls": [
+        "https://www.weather.gov/ffc/atltor31408",
+        "https://www.weather.gov/ffc/pns32308.txt",
+    ],
+}
+
+
 def build_scene42_event() -> WeatherDisruptionEvent:
-    """Create the single fixed disruption event used by this submission."""
+    """Build the fixed historical event for a fictional Scene 42 production."""
+    metadata = deepcopy(SCENE42_HISTORICAL_METADATA)
     return WeatherDisruptionEvent(
         location=SceneLocation(
             location_id="scene-42-location",
             name="Scene 42 Exterior",
-            city="Atlanta",
-            country="USA",
+            city=metadata["city"],
+            country=metadata["country"],
             scene_ids=["scene-42"],
         ),
-        condition="severe storm",
-        scheduled_date="2026-08-29",
+        condition=f"{metadata['area']} {metadata['tornado_rating']} tornado",
+        scheduled_date=metadata["event_date"],
+        evidence_mode="historical_replay",
         raw_payload={
-            "rain": STATE["weather"]["rain"],
-            "wind_mph": STATE["weather"]["wind_mph"],
-            "lightning_risk": STATE["weather"]["lightning_risk"],
-            "visibility_mi": STATE["weather"]["visibility_mi"],
+            "wind_mph": metadata["estimated_max_wind_mph"],
+            "historical_metadata": metadata,
         },
     )
 
@@ -286,7 +305,8 @@ async def analyze_scene():
             )
 
         try:
-            workflow = await run_managed_scene42_workflow(build_scene42_event())
+            event = build_scene42_event()
+            workflow = await run_managed_scene42_workflow(event)
         except Exception as exc:
             append_event(
                 "error",
@@ -320,6 +340,12 @@ async def analyze_scene():
         return {
             "mode": "live",
             "status": "completed",
+            "scenario": {
+                "evidence_mode": event.evidence_mode,
+                "production_is_simulated": True,
+                "event_date": event.scheduled_date,
+                "historical_metadata": event.raw_payload["historical_metadata"],
+            },
             "steps": [
                 {
                     "agent": "Research Agent",
@@ -347,6 +373,8 @@ async def analyze_scene():
                     "summary": workflow.research.summary,
                     "source_url": workflow.research.source_url,
                     "excerpt": workflow.research.excerpt,
+                    "query": workflow.research.query,
+                    "retrieved_at": workflow.research.retrieved_at.isoformat(),
                 },
                 "scheduling": {
                     "action": workflow.schedule.suggested_action,

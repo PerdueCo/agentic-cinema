@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass
@@ -99,3 +99,7 @@ class WeatherDisruptionEvent:
     scheduled_date: str
     findings: list[ResearchFinding] = field(default_factory=list)
     raw_payload: dict[str, Any] = field(default_factory=dict)
+    evidence_mode: Literal[
+        "current_conditions",
+        "historical_replay",
+    ] = "current_conditions"
