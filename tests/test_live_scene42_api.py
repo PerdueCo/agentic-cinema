@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 import sys
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -24,6 +27,18 @@ BACKEND_DIRECTORY = (
 sys.path.insert(0, str(BACKEND_DIRECTORY))
 
 import app.main as main_module  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def restore_shared_state():
+    with main_module.STATE_LOCK:
+        snapshot = deepcopy(main_module.STATE)
+    try:
+        yield
+    finally:
+        with main_module.STATE_LOCK:
+            main_module.STATE.clear()
+            main_module.STATE.update(snapshot)
 
 
 def test_live_mode_calls_orchestrator_and_preserves_human_boundary(
@@ -123,6 +138,21 @@ def test_live_mode_calls_orchestrator_and_preserves_human_boundary(
         dashboard = client.get("/api/dashboard").json()
         assert dashboard["scene"]["stage"] == "Exterior"
         assert dashboard["digital_twin"]["location"] == "Exterior"
+        assert dashboard["approval"]["id"] == body["approval"]["id"]
+        assert dashboard["pending_plan"]["schedule_action"] == "relocate"
+        before = dashboard["digital_twin"]
+
+        # Free-text "Stage B" is not a structured, confirmed destination.
+        decision = client.post(
+            f"/api/approvals/{body['approval']['id']}",
+            json={"decision": "approve", "actor": "Test Producer"},
+        )
+        assert decision.status_code == 200
+        twin = decision.json()["digital_twin"]
+        for field in ("location", "schedule", "budget", "crew", "equipment", "safety"):
+            assert twin[field] == before[field]
+        assert "destination pending" in twin["decision_status"]
+        assert decision.json()["event"]["payload"]["approved_plan"]["estimated_cost"] == "$11,700"
 
     assert len(fake_engine.calls) == 1
     query_message, query_user_id = fake_engine.calls[0]

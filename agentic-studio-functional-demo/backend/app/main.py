@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import os
 from typing import Literal
+from threading import RLock
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -71,28 +72,23 @@ STATE = {
         "crew_exposure": "HIGH",
     },
     "recommendation": {
-        "action": "MOVE SCENE 42 TO STAGE B",
-        "schedule_hours": 2,
-        "budget_delta": 11700,
-        "resulting_safety_risk": "LOW",
-        "reasons": [
-            "Severe weather detected",
-            "High safety risk outdoors",
-            "Stage B available in 2 hours",
-            "Lower cost than a full-day delay",
-            "Minimal impact to the overall schedule",
-        ],
-        "explanation": "The recommendation prioritizes crew safety while minimizing schedule and budget disruption.",
+        "action": "Analysis required",
+        "schedule_hours": None,
+        "budget_delta": None,
+        "resulting_safety_risk": "Human review required",
+        "reasons": [],
+        "explanation": "Run analysis before requesting a human decision.",
     },
     "approval": {
-        "id": "approval-scene-42-weather",
-        "status": "PENDING",
-        "requested_at": now_iso(),
+        "id": None,
+        "status": "AWAITING_ANALYSIS",
+        "requested_at": None,
         "actor": None,
         "note": None,
     },
     "digital_twin": {
         "last_updated": None,
+        "decision_status": "Awaiting analysis and human approval",
         "location": "Exterior",
         "schedule": "UNCHANGED",
         "budget": "UNCHANGED",
@@ -103,18 +99,94 @@ STATE = {
     "events": [],
 }
 
+# State is local to ONE process. Multiple workers require a shared transactional store.
+STATE_LOCK = RLock()
+INITIAL_SCENE = deepcopy(STATE["scene"])
+INITIAL_TWIN = deepcopy(STATE["digital_twin"])
+STATE["pending_plan"] = None
+
+
+def clear_pending(status: str) -> str:
+    """Caller holds STATE_LOCK. Rotate the ID to invalidate older requests."""
+    approval_id = f"approval-scene-42-{uuid4()}"
+    STATE["approval"] = {
+        "id": approval_id,
+        "status": status,
+        "requested_at": now_iso() if status == "ANALYZING" else None,
+        "actor": None,
+        "note": None,
+        "decided_at": None,
+    }
+    STATE["pending_plan"] = None
+    STATE["recommendation"] = {
+        "action": "Analysis in progress" if status == "ANALYZING" else "Analysis required",
+        "schedule_hours": None,
+        "budget_delta": None,
+        "resulting_safety_risk": "Human review required",
+        "reasons": [],
+        "explanation": "Run analysis before requesting a human decision.",
+    }
+    return approval_id
+
+
+def fail_analysis(approval_id: str) -> None:
+    with STATE_LOCK:
+        if STATE["approval"]["id"] == approval_id:
+            clear_pending("ERROR")
+            STATE["recommendation"]["action"] = "Analysis failed — retry required"
+            append_event("error", "Analysis failed; no recommendation is available for approval")
+
+
+def publish_plan(approval_id: str, plan: dict) -> dict:
+    """Publish only the current analysis; never change the Digital Twin."""
+    if plan["schedule_action"] not in {"proceed", "relocate", "reschedule"}:
+        raise ValueError("Unsupported scheduling action")
+    if plan["requires_human_approval"] is not True:
+        raise ValueError("Human approval must be required")
+    with STATE_LOCK:
+        if (
+            STATE["approval"]["id"] != approval_id
+            or STATE["approval"]["status"] != "ANALYZING"
+        ):
+            raise HTTPException(status_code=409, detail="Analysis superseded or reset.")
+        STATE["pending_plan"] = deepcopy({"approval_id": approval_id, **plan})
+        STATE["recommendation"] = {
+            "action": plan["producer_decision"],
+            "schedule_action": plan["schedule_action"],
+            "estimated_cost": plan["estimated_cost"],
+            "estimate_only": True,
+            "schedule_hours": None,
+            "budget_delta": None,
+            "resulting_safety_risk": "Human review required",
+            "reasons": list(plan["reasons"]),
+            "explanation": plan["rationale"],
+        }
+        STATE["approval"]["status"] = "PENDING"
+        STATE["approval"]["requested_at"] = now_iso()
+        append_event(
+            "analysis",
+            "Research -> Scheduling -> Budget -> Producer recommendation awaits human approval",
+            {"mode": plan["mode"], "approval_id": approval_id,
+             "schedule_action": plan["schedule_action"]},
+        )
+        return deepcopy({
+            "recommendation": STATE["recommendation"],
+            "approval": STATE["approval"],
+        })
+
 
 def append_event(kind: str, message: str, payload: dict | None = None):
-    event = {
-        "id": f"EVT-{datetime.now().strftime('%Y%m%d')}-{str(uuid4())[:8].upper()}",
-        "time": now_iso(),
-        "kind": kind,
-        "message": message,
-        "payload": payload or {},
-    }
-    STATE["events"].insert(0, event)
-    del STATE["events"][20:]
-    return event
+    with STATE_LOCK:
+        event = {
+            "id": f"EVT-{datetime.now().strftime('%Y%m%d')}-{str(uuid4())[:8].upper()}",
+            "time": now_iso(),
+            "kind": kind,
+            "message": message,
+            "payload": payload or {},
+        }
+        STATE["events"].insert(0, event)
+        del STATE["events"][20:]
+        return event
 
 
 @app.on_event("startup")
@@ -123,7 +195,7 @@ def seed_events():
         append_event("weather", "Weather alert updated for Scene 42")
         append_event("scheduling", "Scheduling Agent assessed the Scene 42 production impact")
         append_event("budget", "Budget Agent assessed the cost impact of relocation")
-        append_event("approval", "Producer recommendation is awaiting human approval")
+        append_event("approval", "Run analysis before requesting human approval")
 
 
 @app.get("/api/health")
@@ -146,17 +218,18 @@ def health():
 
 @app.get("/api/dashboard")
 def dashboard():
-    return {
-        **STATE,
-        "kpis": {
-            "active_scenes": 18,
-            "weather_alerts": 2,
-            "pending_approvals": 1 if STATE["approval"]["status"] == "PENDING" else 0,
-            "estimated_impact_today": 29400,
-            "schedule_impact_hours": 4.2,
-            "production_health": 93,
-        },
-    }
+    with STATE_LOCK:
+        return deepcopy({
+            **STATE,
+            "kpis": {
+                "active_scenes": 18,
+                "weather_alerts": 2,
+                "pending_approvals": 1 if STATE["approval"]["status"] == "PENDING" else 0,
+                "estimated_impact_today": 29400,
+                "schedule_impact_hours": 4.2,
+                "production_health": 93,
+            },
+        })
 
 
 def get_managed_agent_engine():
@@ -277,13 +350,8 @@ def build_scene42_event() -> WeatherDisruptionEvent:
 @app.post("/api/scenes/42/analyze")
 async def analyze_scene():
     """Run deterministic demo data or the real four-agent workflow."""
-    STATE["approval"].update({
-        "status": "PENDING",
-        "requested_at": now_iso(),
-        "actor": None,
-        "note": None,
-    })
-    STATE["scene"]["status"] = "AT_RISK"
+    with STATE_LOCK:
+        approval_id = clear_pending("ANALYZING")
 
     live_enabled = (
         os.getenv("ALLOW_LIVE_AGENTS", "false").lower() == "true"
@@ -296,6 +364,7 @@ async def analyze_scene():
             if not os.getenv(name)
         ]
         if missing_keys:
+            fail_analysis(approval_id)
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -307,12 +376,26 @@ async def analyze_scene():
         try:
             event = build_scene42_event()
             workflow = await run_managed_scene42_workflow(event)
+            snapshot = publish_plan(approval_id, {
+                "mode": "live",
+                "schedule_action": workflow.schedule.suggested_action,
+                "producer_decision": workflow.producer.final_decision,
+                "producer_summary": workflow.producer.summary,
+                "rationale": workflow.producer.rationale,
+                "estimated_cost": workflow.budget.estimated_cost_impact,
+                "estimate_only": True,
+                "requires_human_approval": workflow.requires_human_approval,
+                "reasons": [
+                    workflow.research.summary,
+                    workflow.schedule.reasoning,
+                    workflow.budget.reasoning,
+                ],
+            })
+        except HTTPException:
+            fail_analysis(approval_id)
+            raise
         except Exception as exc:
-            append_event(
-                "error",
-                "Live four-agent workflow failed",
-                {"error_type": type(exc).__name__},
-            )
+            fail_analysis(approval_id)
             raise HTTPException(
                 status_code=502,
                 detail=(
@@ -320,22 +403,6 @@ async def analyze_scene():
                     f"Error type: {type(exc).__name__}"
                 ),
             ) from exc
-
-        STATE["recommendation"].update({
-            "action": workflow.producer.final_decision,
-            "reasons": [
-                workflow.research.summary,
-                workflow.schedule.reasoning,
-                workflow.budget.reasoning,
-            ],
-            "explanation": workflow.producer.rationale,
-        })
-
-        append_event(
-            "analysis",
-            "Live Research -> Scheduling -> Budget -> Producer pipeline completed",
-            {"mode": "live"},
-        )
 
         return {
             "mode": "live",
@@ -396,15 +463,26 @@ async def analyze_scene():
                     "rationale": workflow.producer.rationale,
                 },
             },
-            "recommendation": STATE["recommendation"],
-            "approval": STATE["approval"],
+            "recommendation": snapshot["recommendation"],
+            "approval": snapshot["approval"],
         }
 
-    append_event(
-        "analysis",
-        "Demo Research -> Scheduling -> Budget -> Producer pipeline completed",
-        {"mode": "demo"},
-    )
+    # Demonstration estimate, not a booked destination or committed expenditure.
+    snapshot = publish_plan(approval_id, {
+        "mode": "demo",
+        "schedule_action": "relocate",
+        "producer_decision": "Relocation recommended — destination pending",
+        "producer_summary": "Demonstration weather disruption affects exterior filming.",
+        "rationale": "Approval authorizes planning; assignments remain unconfirmed.",
+        "estimated_cost": "$11,700 (demo estimate; not committed)",
+        "estimate_only": True,
+        "requires_human_approval": True,
+        "reasons": [
+            "Demonstration weather disruption",
+            "Relocation requires destination confirmation",
+            "Budget is an estimate, not an approved expenditure",
+        ],
+    })
 
     return {
         "mode": "demo",
@@ -423,7 +501,7 @@ async def analyze_scene():
             {
                 "agent": "Budget Agent",
                 "status": "complete",
-                "estimated_cost": "$11,700",
+                "estimated_cost": snapshot["recommendation"]["estimated_cost"],
             },
             {
                 "agent": "Producer Agent",
@@ -431,69 +509,83 @@ async def analyze_scene():
                 "requires_human": True,
             },
         ],
-        "recommendation": STATE["recommendation"],
-        "approval": STATE["approval"],
+        "recommendation": snapshot["recommendation"],
+        "approval": snapshot["approval"],
     }
 
 @app.post("/api/approvals/{approval_id}")
 def decide(approval_id: str, request: DecisionRequest):
-    if approval_id != STATE["approval"]["id"]:
-        raise HTTPException(status_code=404, detail="Approval not found")
+    with STATE_LOCK:
+        approval = STATE["approval"]
+        plan = STATE["pending_plan"]
+        if approval_id != approval["id"]:
+            raise HTTPException(status_code=409, detail="Recommendation changed. Refresh and review it.")
+        if (
+            approval["status"] != "PENDING"
+            or plan is None
+            or plan["approval_id"] != approval_id
+        ):
+            raise HTTPException(status_code=409, detail="No pending recommendation for this decision.")
+        action = plan["schedule_action"]
+        if action not in {"proceed", "relocate", "reschedule"}:
+            raise HTTPException(status_code=409, detail="Unsupported scheduling action.")
+        if plan["requires_human_approval"] is not True:
+            raise HTTPException(status_code=409, detail="Invalid human-approval boundary.")
 
-    STATE["approval"].update({
-        "status": request.decision.upper(),
-        "actor": request.actor,
-        "note": request.note,
-        "decided_at": now_iso(),
-    })
-
-    if request.decision == "approve":
-        STATE["scene"].update({"status": "MOVED", "stage": "Stage B"})
-        STATE["digital_twin"].update({
-            "last_updated": now_iso(),
-            "location": "Stage B",
-            "schedule": "+2 HOURS",
-            "budget": "+$11,700",
-            "crew": "UPDATED",
-            "equipment": "UPDATED",
-            "safety": "LOW RISK",
+        decided_at = now_iso()
+        approval.update({
+            "status": request.decision.upper(),
+            "actor": request.actor,
+            "note": request.note,
+            "decided_at": decided_at,
         })
-        event = append_event(
-            "digital_twin",
-            "Human approved recommendation; Scene 42 propagated to Stage B",
-            {"decision": "approve", "actor": request.actor},
-        )
-    else:
-        STATE["scene"]["status"] = "PLAN_REJECTED"
-        event = append_event(
-            "approval",
-            "Human rejected recommendation; current production plan retained",
-            {"decision": "reject", "actor": request.actor},
-        )
+        if request.decision == "approve":
+            if action == "reschedule":
+                STATE["scene"]["status"] = "RESCHEDULE_REQUIRED"
+                STATE["digital_twin"]["schedule"] = "Rescheduling approved — date pending"
+                decision_status = "Rescheduling approved — date pending"
+            elif action == "relocate":
+                STATE["scene"]["status"] = "RELOCATION_REQUIRED"
+                decision_status = "Relocation approved — destination pending confirmation"
+            else:
+                STATE["scene"]["status"] = "PLAN_APPROVED"
+                decision_status = "Approved — existing production plan retained"
+            # Record authorization, not completed assignments, spending or risk reduction.
+            STATE["digital_twin"]["last_updated"] = decided_at
+            STATE["digital_twin"]["decision_status"] = decision_status
+            message = decision_status
+        else:
+            # No changes to the production state or Digital Twin on rejection.
+            message = "Recommendation rejected; existing production plan retained"
 
-    return {"approval": STATE["approval"], "digital_twin": STATE["digital_twin"], "event": event}
+        event = append_event(
+            "digital_twin" if request.decision == "approve" else "approval",
+            message,
+            {
+                "approval_id": approval_id,
+                "decision": request.decision,
+                "actor": request.actor,
+                "note": request.note,
+                "decided_at": decided_at,
+                "approved_plan" if request.decision == "approve" else "rejected_plan": deepcopy(plan),
+            },
+        )
+        STATE["pending_plan"] = None
+        return deepcopy({
+            "approval": approval,
+            "digital_twin": STATE["digital_twin"],
+            "event": event,
+        })
 
 
 @app.post("/api/demo/reset")
 def reset_demo():
-    STATE["scene"].update({"status": "AT_RISK", "stage": "Exterior"})
-    STATE["approval"].update({
-        "status": "PENDING",
-        "requested_at": now_iso(),
-        "actor": None,
-        "note": None,
-    })
-    STATE["digital_twin"].update({
-        "last_updated": None,
-        "location": "Exterior",
-        "schedule": "UNCHANGED",
-        "budget": "UNCHANGED",
-        "crew": "UNCHANGED",
-        "equipment": "UNCHANGED",
-        "safety": "HIGH RISK",
-    })
-    append_event("system", "Demo reset to pending human decision")
-    return {"status": "reset"}
+    with STATE_LOCK:
+        clear_pending("AWAITING_ANALYSIS")
+        STATE["scene"] = deepcopy(INITIAL_SCENE)
+        STATE["digital_twin"] = deepcopy(INITIAL_TWIN)
+        append_event("system", "Demo reset; run analysis before requesting approval")
+        return {"status": "reset"}
 
 
 @app.post("/api/research")

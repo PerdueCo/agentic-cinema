@@ -22,47 +22,108 @@ function App(){
   const load = async () => {
     try {
       const r = await fetch(`${API}/api/dashboard`);
-      setData(await r.json());
+      if (!r.ok) throw new Error('Dashboard unavailable');
+      const dashboard = await r.json();
+      setData(dashboard);
+      setAnalysis((previous:any) =>
+        previous?.approval?.id === dashboard.approval.id &&
+        ['PENDING', 'APPROVE', 'REJECT'].includes(dashboard.approval.status)
+          ? previous : null
+      );
+      return true;
     } catch {
-      setMessage('Backend is not running. Start FastAPI on port 8000.');
+      setAnalysis(null);
+      setData((previous:Dashboard|null) => previous
+        ? {...previous, approval: {...previous.approval, status: 'UNKNOWN'}} : previous);
+      setMessage('Unable to refresh the dashboard. Check the backend connection.');
+      return false;
     }
   };
   useEffect(()=>{ load(); },[]);
 
   const analyze = async () => {
     setBusy(true);
+    setAnalysis(null);
     setMessage('Agents are analyzing Scene 42...');
     try {
       const res = await fetch(`${API}/api/scenes/42/analyze`, { method: 'POST' });
       if (!res.ok) {
-        setMessage('Analysis failed. Please try again.');
+        await load();
+        setMessage(res.status === 409
+          ? 'Analysis was reset or replaced. Review the current dashboard.'
+          : 'Analysis failed. No new recommendation is available for approval.');
         return;
       }
       const analysisData = await res.json();
       setAnalysis(analysisData);
       await new Promise(r => setTimeout(r, 700));
-      await load();
-      setMessage('Analysis complete. Human decision required.');
+      if (await load()) setMessage('Analysis complete. Review the current recommendation before deciding.');
     } catch {
-      setMessage('Analysis failed. Unable to connect to server.');
+      // The server may still be running; require a fresh dashboard before a decision.
+      setData((previous:Dashboard|null) => previous
+        ? {...previous, approval: {...previous.approval, status: 'UNKNOWN'}} : previous);
+      setMessage('Analysis connection lost. Refresh the page before making a decision.');
     } finally {
       setBusy(false);
     }
   };
   const decide = async (decision:'approve'|'reject') => {
+    const approvalId = data?.approval?.id;
+    if (busy || !approvalId || data?.approval?.status !== 'PENDING') {
+      setMessage('Run analysis and review a pending recommendation first.');
+      return;
+    }
     setBusy(true);
-    const r = await fetch(`${API}/api/approvals/approval-scene-42-weather`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({decision, actor:'Executive Producer'})
-    });
-    if(!r.ok) setMessage('Decision failed. Check backend console.');
-    else setMessage(decision==='approve' ? 'Approved. Digital Twin state propagated.' : 'Rejected. Existing plan retained.');
-    await load(); setBusy(false);
+    try {
+      const r = await fetch(`${API}/api/approvals/${encodeURIComponent(approvalId)}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({decision, actor:'Executive Producer'})
+      });
+      if (!r.ok) {
+        setData((previous:Dashboard|null) => previous
+          ? {...previous, approval: {...previous.approval, status: 'UNKNOWN'}} : previous);
+        await load();
+        setMessage(r.status === 409
+          ? 'Recommendation changed or was already decided. Review the refreshed state.'
+          : 'Decision was not accepted. Review the current state before trying again.');
+        return;
+      }
+      const result = await r.json();
+      setData((previous:Dashboard|null) => previous ? {
+        ...previous, approval: result.approval, digital_twin: result.digital_twin
+      } : previous);
+      if (await load()) {
+        setMessage(decision === 'approve'
+          ? 'Approval recorded. Review the Digital Twin state for pending arrangements.'
+          : 'Rejected. Existing production plan retained.');
+      } else {
+        setMessage('Decision recorded, but dashboard refresh failed. Refresh the page.');
+      }
+    } catch {
+      setData((previous:Dashboard|null) => previous
+        ? {...previous, approval: {...previous.approval, status: 'UNKNOWN'}} : previous);
+      setMessage('Decision status could not be confirmed. Refresh before trying again.');
+    } finally {
+      setBusy(false);
+    }
   };
   const reset = async () => {
-    setAnalysis(null);
-    await fetch(`${API}/api/demo/reset`, {method:'POST'}); await load();
-    setMessage('Demo reset. Scene 42 is awaiting approval again.');
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/demo/reset`, {method:'POST'});
+      if (!r.ok) throw new Error('Reset failed');
+      setAnalysis(null);
+      setData((previous:Dashboard|null) => previous
+        ? {...previous, approval: {...previous.approval, status: 'AWAITING_ANALYSIS'}} : previous);
+      if (await load()) setMessage('Demo reset. Run analysis before requesting approval.');
+    } catch {
+      setData((previous:Dashboard|null) => previous
+        ? {...previous, approval: {...previous.approval, status: 'UNKNOWN'}} : previous);
+      setMessage('Reset status could not be confirmed. Refresh the page.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if(screen==='landing') return <Landing onLaunch={()=>setScreen('auth')} />;
@@ -116,8 +177,17 @@ function Auth({onSignIn,onBack}:{onSignIn:()=>void,onBack:()=>void}){
 
 function DashboardView({data,analysis,busy,message,analyze,decide,reset}:{data:Dashboard|null,analysis:any|null,busy:boolean,message:string,analyze:()=>void,decide:(d:'approve'|'reject')=>void,reset:()=>void}){
   if(!data) return <main className="page centered"><div className="spinner"></div><p>Connecting to Digital Twin API...</p></main>;
-  const pending = data.approval.status==='PENDING';
-  const approved = data.approval.status==='APPROVE';
+  const pending = data.approval.status==='PENDING' && Boolean(data.approval.id);
+  const approvalLabels:Record<string,string> = {
+    PENDING: 'Producer Decision Required',
+    APPROVE: 'Approved',
+    REJECT: 'Rejected',
+    AWAITING_ANALYSIS: 'Run Analysis First',
+    ANALYZING: 'Analysis in Progress',
+    ERROR: 'Analysis Failed — Retry Required',
+    UNKNOWN: 'Refresh to Confirm Status',
+  };
+  const approvalLabel = approvalLabels[data.approval.status] || 'Refresh to Confirm Status';
   return <main className="page dashboard-page">
     <header className="dashboard-header"><Brand/><div><span className="live-dot"></span> Live &nbsp; <Clock3 size={15}/> 2:34 PM</div></header>
     <div className="dashboard-layout">
@@ -140,7 +210,7 @@ function DashboardView({data,analysis,busy,message,analyze,decide,reset}:{data:D
           <section className="panel activity"><span>AI AGENT ACTIVITY</span><p>Research Agent — retrieved weather data</p><p>Scheduling Agent — impact analysis complete</p><p>Budget Agent — cost impact analysis complete</p><p>Producer Agent — recommendation ready</p></section>
         </div>
 
-        <div className="flow-title"><h2>HUMAN IN THE LOOP DECISION FLOW — SCENE 42 WEATHER EVENT</h2><button className="ghost" onClick={reset}><RefreshCcw size={15}/> Reset Demo</button></div>
+        <div className="flow-title"><h2>HUMAN IN THE LOOP DECISION FLOW — SCENE 42 WEATHER EVENT</h2><button className="ghost" onClick={reset} disabled={busy}><RefreshCcw size={15}/> Reset Demo</button></div>
         <section className="flow">
           <Step n="1" title="DETECT & INGEST" icon={<CloudRain/>}><Agent name="Research Agent" sub="Parallel Search API"/><div className="mini-weather"><strong>Weather Data Retrieved</strong><span>Heavy rain</span><span>Wind: 32 mph</span><span>Lightning: High</span><span>Visibility: 2 mi</span></div><Metric label="Confidence" value="92%"/></Step>
           <Connector/>
@@ -150,9 +220,9 @@ function DashboardView({data,analysis,busy,message,analyze,decide,reset}:{data:D
           <Connector/>
           <Step n="4" title="PRODUCER RECOMMENDATION" icon={<BrainCircuit/>}><Agent name="Producer Agent" sub="Synthesis & Recommendation"/><div className="recommended">{data.recommendation.action}</div><ul className="compact">{data.recommendation.reasons.map((r:string)=><li key={r}>✓ {r}</li>)}</ul><div className="impact"><span>Schedule <b>{analysis?.evidence?.scheduling?.action || "Awaiting analysis"}</b></span><span>Budget <b>{analysis?.evidence?.budget?.estimated_cost || "Awaiting analysis"}</b></span><span>Safety <b>Human review</b></span></div></Step>
           <Connector/>
-          <Step n="5" title="HUMAN APPROVAL" icon={<UserCheck/>} hot={pending}><div className="human"><UserCheck size={42}/><strong>{pending?'Producer Decision Required':approved?'Approved':'Rejected'}</strong></div><div className="decision-summary"><span>Decision</span><b>{data.recommendation.action}</b><div className="impact"><span>Schedule <b>{analysis?.evidence?.scheduling?.action || "Awaiting analysis"}</b></span><span>Budget <b>{analysis?.evidence?.budget?.estimated_cost || "Awaiting analysis"}</b></span><span>Safety <b>Human review</b></span></div></div><div className="decision-actions"><button className="reject" onClick={()=>decide('reject')} disabled={!pending||busy}><XCircle size={17}/> Reject</button><button className="approve" onClick={()=>decide('approve')} disabled={!pending||busy}><CheckCircle2 size={17}/> Approve</button></div></Step>
+          <Step n="5" title="HUMAN APPROVAL" icon={<UserCheck/>} hot={pending}><div className="human"><UserCheck size={42}/><strong>{approvalLabel}</strong></div><div className="decision-summary"><span>Decision</span><b>{data.recommendation.action}</b><div className="impact"><span>Schedule <b>{analysis?.evidence?.scheduling?.action || "Awaiting analysis"}</b></span><span>Budget <b>{analysis?.evidence?.budget?.estimated_cost || "Awaiting analysis"}</b></span><span>Safety <b>Human review</b></span></div></div><div className="decision-actions"><button className="reject" onClick={()=>decide('reject')} disabled={!pending||busy}><XCircle size={17}/> Reject</button><button className="approve" onClick={()=>decide('approve')} disabled={!pending||busy}><CheckCircle2 size={17}/> Approve</button></div></Step>
           <Connector/>
-          <Step n="6" title="DIGITAL TWIN UPDATED" icon={<Database/>}><div className="twin-update"><strong>Scene 42 Update Propagated</strong><p>Location <b>{data.digital_twin.location}</b></p><p>Schedule <b>{data.digital_twin.schedule}</b></p><p>Budget <b>{data.digital_twin.budget}</b></p><p>Crew <b>{data.digital_twin.crew}</b></p><p>Equipment <b>{data.digital_twin.equipment}</b></p><p>Safety <b>{data.digital_twin.safety}</b></p></div><small>Event history contains {data.events.length} recent events.</small></Step>
+          <Step n="6" title="DIGITAL TWIN STATE" icon={<Database/>}><div className="twin-update"><strong>{data.digital_twin.decision_status || "Awaiting human decision"}</strong><p>Location <b>{data.digital_twin.location}</b></p><p>Schedule <b>{data.digital_twin.schedule}</b></p><p>Budget <b>{data.digital_twin.budget}</b></p><p>Crew <b>{data.digital_twin.crew}</b></p><p>Equipment <b>{data.digital_twin.equipment}</b></p><p>Safety <b>{data.digital_twin.safety}</b></p></div><small>Event history contains {data.events.length} recent events.</small></Step>
         </section>
       </section>
     </div>
