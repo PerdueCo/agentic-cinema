@@ -10,6 +10,7 @@ straight from Gemini's synthesis of all three inputs.
 from __future__ import annotations
 
 import os
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -33,6 +34,36 @@ def test_producer_agent_default_vertex_client(monkeypatch):
             project="test-project",
             location="us-east1",
         )
+
+
+@pytest.mark.parametrize("action,decision", [
+    ("reschedule", "Reschedule production"),
+    ("relocate", "Relocate production"),
+    ("proceed", "Proceed with filming — no conflict exists."),
+])
+def test_replay_prompt_preserves_summary_rationale_and_decision_rules(action, decision):
+    client = MagicMock()
+    client.models.generate_content.return_value = SimpleNamespace(
+        text="Proceed with filming — no conflict exists.\nOriginal summary.\nOriginal rationale."
+    )
+    event = WeatherDisruptionEvent(
+        location=SceneLocation("scene-42-location", "Exterior", "Atlanta", "USA", ["scene-42"]),
+        condition="EF2 tornado", scheduled_date="2008-03-14", evidence_mode="historical_replay",
+    )
+    finding = ResearchFinding("Historical query", "Candidate evidence", "https://example.com", "Historical excerpt")
+    schedule = ScheduleRecommendation(["scene-42"], "Scenario reasoning", action)
+    budget = BudgetAssessment("$10,000-$30,000", "Estimate", "approve")
+    result = ProducerAgent(gemini_client=client).recommend(event, finding, schedule, budget)
+    prompt = client.models.generate_content.call_args.kwargs["contents"]
+    assert "2008-03-14" in prompt and "historical_replay" in prompt
+    assert "not human authorization" in prompt
+    assert "never approved adjustment costs" in prompt
+    assert finding.excerpt in prompt
+    assert result.final_decision == decision
+    assert result.summary == "Original summary."
+    assert result.rationale == "Original rationale."
+    if action != "proceed":
+        assert "proceed" not in result.final_decision.lower()
 
 
 def test_recommend_synthesizes_all_three_inputs_via_gemini():

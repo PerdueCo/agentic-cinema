@@ -80,6 +80,19 @@ class SchedulingAgent:
             f"Parallel Research Finding (Supporting): {finding.summary}"
         )
 
+        if event.evidence_mode == "historical_replay":
+            prompt += (
+                f"\nEvidence mode: historical_replay. Event date: {event.scheduled_date}. "
+                f"Event city: {event.location.city}, {event.location.country}. "
+                "Evaluate a fictional production DURING this historical event, not today. "
+                "Say 'in the historical scenario', never imply a current active emergency. "
+                "Raw payload values are authoritative SCENARIO inputs for scheduling, "
+                "not independently verified measurements at the fictional set. "
+                "Do not claim the source verifies wind values absent from its excerpt. "
+                f"Source excerpt: {finding.excerpt or 'Not confirmed'}. "
+                "Preserve all severe-weather precautions and human review."
+            )
+
         # --- Gemini call (runtime, not just README mention) -----------------
         response = self._gemini.models.generate_content(
             model=GEMINI_MODEL, contents=prompt

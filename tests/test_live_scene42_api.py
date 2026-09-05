@@ -159,3 +159,31 @@ def test_live_mode_calls_orchestrator_and_preserves_human_boundary(
     assert "Atlanta" in query_message
     assert "scene-42" in query_message
     assert query_user_id.startswith("user-")
+
+
+@pytest.mark.parametrize("stream_event,category", [
+    ({"error_code": "PRIVATE_SERVICE_DETAIL"}, "managed_error_event"),
+    ({"content": {"parts": []}}, "missing_function_response"),
+])
+def test_managed_stream_failure_is_correlated_without_leaking_payload(monkeypatch, caplog, stream_event, category):
+    monkeypatch.setenv("ALLOW_LIVE_AGENTS", "true")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("SCENE42_AGENT_ENGINE_RESOURCE_NAME", "test-engine")
+
+    class BrokenEngine:
+        async def async_stream_query(self, **kwargs):
+            yield stream_event
+
+    monkeypatch.setattr(main_module, "get_managed_agent_engine", lambda: BrokenEngine())
+    with TestClient(main_module.app) as client:
+        client.post("/api/demo/reset")
+        response = client.post("/api/scenes/42/analyze")
+        assert response.status_code == 502
+        reference = response.json()["detail"]["support_reference"]
+        body = client.get("/api/dashboard").json()
+        assert body["attempt"]["reference"] == reference
+        assert body["attempt"]["category"] == category
+        assert body["attempt"]["stage"] == "managed_stream"
+        assert body["approval"]["status"] == "ERROR"
+        assert body["analysis"] is None
+        assert "PRIVATE_SERVICE_DETAIL" not in response.text + caplog.text

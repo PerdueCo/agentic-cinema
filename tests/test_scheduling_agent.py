@@ -17,6 +17,25 @@ from src.agents.scheduling_agent import SchedulingAgent
 from src.shared.schemas import ResearchFinding, SceneLocation, WeatherDisruptionEvent
 
 
+def test_historical_prompt_distinguishes_scenario_and_keeps_severe_guardrail():
+    client = MagicMock()
+    client.models.generate_content.return_value = SimpleNamespace(text="PROCEED\nThe storm is over.")
+    event = WeatherDisruptionEvent(
+        location=SceneLocation("scene-42-location", "Exterior", "Atlanta", "USA", ["scene-42"]),
+        condition="Downtown Atlanta EF2 tornado", scheduled_date="2008-03-14",
+        evidence_mode="historical_replay", raw_payload={"wind_mph": 130},
+    )
+    finding = ResearchFinding("Historical query", "Candidate evidence", "https://example.com", "An EF2 tornado struck Atlanta on March 14, 2008.")
+    result = SchedulingAgent(gemini_client=client).recommend(event, finding)
+    prompt = client.models.generate_content.call_args.kwargs["contents"]
+    assert "2008-03-14" in prompt and "historical_replay" in prompt
+    assert "fictional production DURING this historical event, not today" in prompt
+    assert "not independently verified measurements" in prompt
+    assert finding.excerpt in prompt
+    assert result.suggested_action == "relocate"
+    assert result.reasoning.startswith("Evidence conflict:")
+
+
 def test_scheduling_agent_default_vertex_client(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east1")

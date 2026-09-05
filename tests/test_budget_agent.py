@@ -16,6 +16,24 @@ from src.agents.budget_agent import BudgetAgent
 from src.shared.schemas import ScheduleRecommendation, SceneLocation, WeatherDisruptionEvent
 
 
+def test_historical_budget_prompt_is_advisory_and_preserves_generated_output():
+    client = MagicMock()
+    client.models.generate_content.return_value = SimpleNamespace(text="$10,000-$30,000\nAPPROVE\nPlanning estimate only.")
+    event = WeatherDisruptionEvent(
+        location=SceneLocation("scene-42-location", "Exterior", "Atlanta", "USA", ["scene-42"]),
+        condition="EF2 tornado", scheduled_date="2008-03-14", evidence_mode="historical_replay",
+    )
+    schedule = ScheduleRecommendation(["scene-42"], "Historical scenario", "reschedule")
+    result = BudgetAgent(gemini_client=client).assess(event, schedule)
+    prompt = client.models.generate_content.call_args.kwargs["contents"]
+    assert "2008-03-14" in prompt and "historical_replay" in prompt
+    assert "not an authorization or an approved expenditure" in prompt
+    assert "not a quote" in prompt
+    assert result.estimated_cost_impact == "$10,000-$30,000"
+    assert result.recommended_action == "approve"
+    assert result.reasoning == "Planning estimate only."
+
+
 def test_budget_agent_default_vertex_client(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-east1")

@@ -5,6 +5,9 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 import os
+import logging
+from contextvars import ContextVar
+from time import perf_counter
 from typing import Literal
 from threading import RLock
 from uuid import uuid4
@@ -104,6 +107,54 @@ STATE_LOCK = RLock()
 INITIAL_SCENE = deepcopy(STATE["scene"])
 INITIAL_TWIN = deepcopy(STATE["digital_twin"])
 STATE["pending_plan"] = None
+STATE["analysis"] = None
+STATE["attempt"] = None
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+workflow_stage = ContextVar("workflow_stage", default="request")
+
+
+class ManagedWorkflowError(RuntimeError):
+    """Only fixed local diagnostic categories, never untrusted service messages."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def execution_mode() -> str:
+    return "live" if os.getenv("ALLOW_LIVE_AGENTS", "false").lower() == "true" else "demo"
+
+
+def scenario_context() -> dict:
+    """Describe the fixed scenario independently from agent execution mode."""
+    return {
+        "evidence_mode": "historical_replay", "production_is_simulated": True,
+        "event_date": SCENE42_HISTORICAL_METADATA["event_date"],
+        "historical_metadata": deepcopy(SCENE42_HISTORICAL_METADATA),
+    }
+
+
+def finish_attempt(approval_id: str, status: str, started: float,
+                   stage: str, category: str | None = None) -> None:
+    """Log allowlisted diagnostics only: no exception text, payloads or credentials."""
+    duration = round(perf_counter() - started, 3)
+    with STATE_LOCK:
+        attempt = STATE.get("attempt")
+        if attempt and attempt["approval_id"] == approval_id:
+            attempt.update(status=status, finished_at=now_iso(),
+                           duration_seconds=duration, stage=stage, category=category)
+    logger.info("scene42 attempt=%s status=%s stage=%s category=%s duration_seconds=%s",
+                approval_id, status, stage, category or "none", duration)
+
+
+def retain_result(approval_id: str, result: dict) -> dict:
+    """Retain the original evidence for reloads, paired with its approval identity."""
+    with STATE_LOCK:
+        if STATE["approval"]["id"] != approval_id:
+            raise HTTPException(status_code=409, detail="Analysis superseded or reset.")
+        STATE["analysis"] = deepcopy(result)
+        return deepcopy(result)
 
 
 def clear_pending(status: str) -> str:
@@ -118,6 +169,7 @@ def clear_pending(status: str) -> str:
         "decided_at": None,
     }
     STATE["pending_plan"] = None
+    STATE["analysis"] = None
     STATE["recommendation"] = {
         "action": "Analysis in progress" if status == "ANALYZING" else "Analysis required",
         "schedule_hours": None,
@@ -134,7 +186,8 @@ def fail_analysis(approval_id: str) -> None:
         if STATE["approval"]["id"] == approval_id:
             clear_pending("ERROR")
             STATE["recommendation"]["action"] = "Analysis failed — retry required"
-            append_event("error", "Analysis failed; no recommendation is available for approval")
+            append_event("error", "Analysis failed; no recommendation is available for approval",
+                         {"support_reference": approval_id})
 
 
 def publish_plan(approval_id: str, plan: dict) -> dict:
@@ -192,10 +245,7 @@ def append_event(kind: str, message: str, payload: dict | None = None):
 @app.on_event("startup")
 def seed_events():
     if not STATE["events"]:
-        append_event("weather", "Weather alert updated for Scene 42")
-        append_event("scheduling", "Scheduling Agent assessed the Scene 42 production impact")
-        append_event("budget", "Budget Agent assessed the cost impact of relocation")
-        append_event("approval", "Run analysis before requesting human approval")
+        append_event("system", "Production simulation initialized; no agent analysis performed")
 
 
 @app.get("/api/health")
@@ -221,13 +271,11 @@ def dashboard():
     with STATE_LOCK:
         return deepcopy({
             **STATE,
+            "execution_mode": execution_mode(),
+            "scenario": scenario_context(),
+            "metrics_are_illustrative": True,
             "kpis": {
-                "active_scenes": 18,
-                "weather_alerts": 2,
                 "pending_approvals": 1 if STATE["approval"]["status"] == "PENDING" else 0,
-                "estimated_impact_today": 29400,
-                "schedule_impact_hours": 4.2,
-                "production_health": 93,
             },
         })
 
@@ -252,6 +300,7 @@ async def run_managed_scene42_workflow(
     event: WeatherDisruptionEvent,
 ) -> Scene42WorkflowResult:
     """Serialize event, stream via managed engine, and validate output."""
+    workflow_stage.set("engine_lookup")
     engine = get_managed_agent_engine()
     serialized_event = json.dumps(asdict(event))
     message = (
@@ -268,16 +317,17 @@ async def run_managed_scene42_workflow(
 
     workflow_result_data = None
 
+    workflow_stage.set("managed_stream")
     async for stream_event in engine.async_stream_query(
         message=message, user_id=user_id
     ):
         # Detect confirmed managed error shapes
         error_code = read_field(stream_event, "error_code")
         if error_code is not None:
-            raise RuntimeError(f"Managed error: {error_code}")
+            raise ManagedWorkflowError("managed_error_event")
         code = read_field(stream_event, "code")
         if code is not None:
-            raise RuntimeError(f"Managed error: {code}")
+            raise ManagedWorkflowError("managed_error_event")
 
         # Extract content.parts[].function_response.response
         content = read_field(stream_event, "content")
@@ -292,9 +342,7 @@ async def run_managed_scene42_workflow(
                             workflow_result_data = resp
 
     if workflow_result_data is None:
-        raise RuntimeError(
-            "No workflow function response returned from the managed agent engine."
-        )
+        raise ManagedWorkflowError("missing_function_response")
 
     # Recursively convert any protobuf struct/map containers to plain python dicts
     def to_dict(obj):
@@ -304,6 +352,7 @@ async def run_managed_scene42_workflow(
             return [to_dict(x) for x in obj]
         return obj
 
+    workflow_stage.set("result_validation")
     plain_dict = to_dict(workflow_result_data)
     return TypeAdapter(Scene42WorkflowResult).validate_python(plain_dict)
 
@@ -350,8 +399,17 @@ def build_scene42_event() -> WeatherDisruptionEvent:
 @app.post("/api/scenes/42/analyze")
 async def analyze_scene():
     """Run deterministic demo data or the real four-agent workflow."""
+    started = perf_counter()
+    workflow_stage.set("request")
     with STATE_LOCK:
+        if STATE["approval"]["status"] == "ANALYZING":
+            raise HTTPException(status_code=409, detail="Analysis already running. Check status.")
         approval_id = clear_pending("ANALYZING")
+        STATE["attempt"] = {
+            "reference": approval_id, "approval_id": approval_id,
+            "started_at": now_iso(), "status": "running", "finished_at": None,
+            "duration_seconds": None, "stage": "request", "category": None,
+        }
 
     live_enabled = (
         os.getenv("ALLOW_LIVE_AGENTS", "false").lower() == "true"
@@ -365,6 +423,7 @@ async def analyze_scene():
         ]
         if missing_keys:
             fail_analysis(approval_id)
+            finish_attempt(approval_id, "failed", started, "configuration", "configuration")
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -376,6 +435,7 @@ async def analyze_scene():
         try:
             event = build_scene42_event()
             workflow = await run_managed_scene42_workflow(event)
+            workflow_stage.set("plan_publication")
             snapshot = publish_plan(approval_id, {
                 "mode": "live",
                 "schedule_action": workflow.schedule.suggested_action,
@@ -393,18 +453,24 @@ async def analyze_scene():
             })
         except HTTPException:
             fail_analysis(approval_id)
+            finish_attempt(approval_id, "superseded", started, workflow_stage.get())
             raise
         except Exception as exc:
             fail_analysis(approval_id)
+            category = (
+                exc.reason if isinstance(exc, ManagedWorkflowError) else
+                "timeout" if isinstance(exc, TimeoutError) else
+                "validation" if isinstance(exc, ValueError) else
+                "connection" if isinstance(exc, ConnectionError) else "workflow"
+            )
+            finish_attempt(approval_id, "failed", started, workflow_stage.get(), category)
             raise HTTPException(
                 status_code=502,
-                detail=(
-                    "The live four-agent workflow could not complete. "
-                    f"Error type: {type(exc).__name__}"
-                ),
+                detail={"message": "Analysis could not complete. No recommendation is available for approval.",
+                        "support_reference": approval_id},
             ) from exc
 
-        return {
+        result = {
             "mode": "live",
             "status": "completed",
             "scenario": {
@@ -466,6 +532,9 @@ async def analyze_scene():
             "recommendation": snapshot["recommendation"],
             "approval": snapshot["approval"],
         }
+        result = retain_result(approval_id, result)
+        finish_attempt(approval_id, "completed", started, "completed")
+        return result
 
     # Demonstration estimate, not a booked destination or committed expenditure.
     snapshot = publish_plan(approval_id, {
@@ -484,7 +553,7 @@ async def analyze_scene():
         ],
     })
 
-    return {
+    result = {
         "mode": "demo",
         "status": "completed",
         "steps": [
@@ -512,6 +581,9 @@ async def analyze_scene():
         "recommendation": snapshot["recommendation"],
         "approval": snapshot["approval"],
     }
+    result = retain_result(approval_id, result)
+    finish_attempt(approval_id, "completed", started, "completed")
+    return result
 
 @app.post("/api/approvals/{approval_id}")
 def decide(approval_id: str, request: DecisionRequest):
@@ -582,6 +654,7 @@ def decide(approval_id: str, request: DecisionRequest):
 def reset_demo():
     with STATE_LOCK:
         clear_pending("AWAITING_ANALYSIS")
+        STATE["attempt"] = None
         STATE["scene"] = deepcopy(INITIAL_SCENE)
         STATE["digital_twin"] = deepcopy(INITIAL_TWIN)
         append_event("system", "Demo reset; run analysis before requesting approval")
