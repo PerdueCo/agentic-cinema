@@ -53,6 +53,20 @@ def test_scene42_analysis_uses_fixed_four_agent_scope_and_waits_for_human():
         assert dashboard["digital_twin"]["safety"] == "HIGH RISK"
 
 
+def test_demo_execution_keeps_historical_replay_scenario_context():
+    with TestClient(app) as client:
+        client.post("/api/demo/reset")
+        dashboard = client.get("/api/dashboard").json()
+
+    assert dashboard["execution_mode"] == "demo"
+    assert dashboard["scenario"]["evidence_mode"] == "historical_replay"
+    assert dashboard["scenario"]["production_is_simulated"] is True
+    assert dashboard["scenario"]["event_date"] == "2008-03-14"
+    assert dashboard["scenario"]["historical_metadata"] == (
+        backend.SCENE42_HISTORICAL_METADATA
+    )
+
+
 def test_demo_approval_records_relocation_without_inventing_assignments():
     with TestClient(app) as client:
         client.post("/api/demo/reset")
@@ -165,6 +179,30 @@ def submit_decision(client, approval_id, decision="approve"):
         f"/api/approvals/{approval_id}",
         json={"decision": decision, "actor": "Test Producer", "note": "Reviewed simulation"},
     )
+
+
+def test_dashboard_omits_retired_fixed_kpis_and_preserves_agent_outputs(
+    live_approval_workflow,
+):
+    with patch(
+        "app.main.run_managed_scene42_workflow",
+        new_callable=AsyncMock,
+        return_value=live_approval_workflow,
+    ):
+        with TestClient(app) as client:
+            client.post("/api/demo/reset")
+            initial = client.get("/api/dashboard").json()
+            assert initial["kpis"] == {"pending_approvals": 0}
+
+            analysis = client.post("/api/scenes/42/analyze")
+            assert analysis.status_code == 200
+            dashboard = client.get("/api/dashboard").json()
+
+    assert dashboard["kpis"] == {"pending_approvals": 1}
+    assert dashboard["recommendation"]["estimated_cost"] == "$15,000 - $45,000"
+    assert dashboard["recommendation"]["schedule_action"] == "reschedule"
+    assert dashboard["recommendation"]["schedule_hours"] is None
+    assert dashboard["recommendation"]["budget_delta"] is None
 
 
 @pytest.mark.parametrize("action,scene_status", [
@@ -336,6 +374,12 @@ async def test_late_analysis_cannot_restore_invalidated_plan(
             if replacement == "reset":
                 backend.reset_demo()
             else:
+                # Concurrent submissions are now rejected. Reset explicitly
+                # before starting a replacement to retain the late-result check.
+                with pytest.raises(backend.HTTPException) as duplicate:
+                    await backend.analyze_scene()
+                assert duplicate.value.status_code == 409
+                backend.reset_demo()
                 await backend.analyze_scene()
             snapshot = deepcopy(backend.STATE)
             release.set()
@@ -343,6 +387,115 @@ async def test_late_analysis_cannot_restore_invalidated_plan(
                 await asyncio.wait_for(task, timeout=2)
             assert stale.value.status_code == (502 if old_fails else 409)
             assert backend.STATE == snapshot
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+
+def test_dashboard_exposes_context_before_analysis_and_truthful_startup(monkeypatch):
+    monkeypatch.setenv("ALLOW_LIVE_AGENTS", "true")
+    backend.STATE["events"] = []
+    with TestClient(app) as client:
+        client.post("/api/demo/reset")
+        body = client.get("/api/dashboard").json()
+    assert body["execution_mode"] == "live"
+    assert body["scenario"]["event_date"] == "2008-03-14"
+    assert body["scenario"]["production_is_simulated"] is True
+    assert body["metrics_are_illustrative"] is True
+    assert body["analysis"] is None
+    assert body["attempt"] is None
+    assert not any("assessed" in event["message"] for event in body["events"])
+
+
+@pytest.mark.parametrize("decision", ["approve", "reject"])
+def test_reviewable_evidence_survives_reload_and_decision(live_approval_workflow, decision):
+    with patch("app.main.run_managed_scene42_workflow", new_callable=AsyncMock,
+               return_value=live_approval_workflow) as managed:
+        with TestClient(app) as client:
+            client.post("/api/demo/reset")
+            result = client.post("/api/scenes/42/analyze").json()
+            approval_id = result["approval"]["id"]
+            before = client.get("/api/dashboard").json()
+            assert before["analysis"] == result
+            assert before["attempt"]["status"] == "completed"
+            assert before["attempt"]["duration_seconds"] >= 0
+            assert submit_decision(client, approval_id, decision).status_code == 200
+            refreshed = client.get("/api/dashboard").json()
+            assert refreshed["analysis"] == result
+            assert refreshed["approval"]["status"] == decision.upper()
+            assert refreshed["analysis"]["approval"]["id"] == refreshed["approval"]["id"]
+            if decision == "reject":
+                assert refreshed["digital_twin"] == before["digital_twin"]
+            client.post("/api/demo/reset")
+            reset = client.get("/api/dashboard").json()
+            assert reset["analysis"] is None
+            assert reset["attempt"] is None
+            assert reset["approval"]["id"] != approval_id
+            managed.assert_awaited_once()
+
+
+def test_failure_then_recovery_has_fresh_identity_and_safe_diagnostics(live_approval_workflow, caplog):
+    with patch("app.main.run_managed_scene42_workflow", new_callable=AsyncMock,
+               side_effect=[RuntimeError("PRIVATE_TOKEN_AND_PAYLOAD"), live_approval_workflow]) as managed:
+        with TestClient(app) as client:
+            client.post("/api/demo/reset")
+            before = client.get("/api/dashboard").json()["digital_twin"]
+            failure = client.post("/api/scenes/42/analyze")
+            assert failure.status_code == 502
+            reference = failure.json()["detail"]["support_reference"]
+            failed = client.get("/api/dashboard").json()
+            assert failed["analysis"] is None
+            assert failed["attempt"]["reference"] == reference
+            assert failed["attempt"]["status"] == "failed"
+            assert failed["approval"]["status"] == "ERROR"
+            assert failed["approval"]["id"] != reference
+            assert failed["digital_twin"] == before
+            assert reference in caplog.text
+            assert "PRIVATE_TOKEN_AND_PAYLOAD" not in caplog.text + failure.text
+            assert submit_decision(client, reference).status_code == 409
+            success = client.post("/api/scenes/42/analyze")
+            assert success.status_code == 200
+            recovered = client.get("/api/dashboard").json()
+            assert recovered["approval"]["status"] == "PENDING"
+            assert recovered["analysis"]["approval"]["id"] == recovered["approval"]["id"]
+            assert recovered["attempt"]["reference"] != reference
+            assert recovered["digital_twin"] == before
+            assert managed.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_status_checks_and_duplicate_submission_do_not_restart_work(live_approval_workflow):
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def controlled(event):
+        started.set()
+        await release.wait()
+        return live_approval_workflow
+
+    backend.reset_demo()
+    with patch("app.main.run_managed_scene42_workflow", new_callable=AsyncMock,
+               side_effect=controlled) as managed:
+        task = asyncio.create_task(backend.analyze_scene())
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2)
+            snapshot = backend.dashboard()
+            assert snapshot["approval"]["status"] == "ANALYZING"
+            assert snapshot["analysis"] is None
+            assert snapshot["attempt"]["started_at"]
+            with pytest.raises(backend.HTTPException) as duplicate:
+                await backend.analyze_scene()
+            assert duplicate.value.status_code == 409
+            assert backend.dashboard() == snapshot
+            managed.assert_awaited_once()
+            release.set()
+            result = await asyncio.wait_for(task, timeout=2)
+            assert backend.dashboard()["analysis"] == result
         finally:
             release.set()
             if not task.done():

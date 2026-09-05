@@ -78,6 +78,24 @@ class ProducerAgent:
             f"({budget.estimated_cost_impact}) â€” {budget.reasoning}"
         )
 
+        prompt += (
+            "\nNo human decision has been made for this recommendation. "
+            "The Budget Agent's action is advisory, not human authorization. "
+            "Describe costs as AI-generated planning estimates, never approved "
+            "adjustment costs. Do not invent a replacement date, confirmed "
+            "destination, booking, expenditure, or reduction in safety risk."
+        )
+        if event.evidence_mode == "historical_replay":
+            prompt += (
+                f"\nEvidence mode: historical_replay. Event date: {event.scheduled_date}. "
+                f"Event city: {event.location.city}, {event.location.country}. "
+                "This is fictional production during a historical event, not a "
+                "current active tornado or emergency. Explicitly say historical "
+                "scenario. Distinguish scenario assumptions from retrieved facts. "
+                f"Source excerpt: {finding.excerpt or 'Not confirmed'}. "
+                "Do not claim verification beyond the excerpt."
+            )
+
         # --- Gemini call (runtime, not just README mention) -----------------
         response = self._gemini.models.generate_content(
             model=GEMINI_MODEL, contents=prompt

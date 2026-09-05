@@ -79,6 +79,21 @@ class BudgetAgent:
             f"Scheduling rationale: {recommendation.reasoning}"
         )
 
+        prompt += (
+            "\nThis is an advisory assessment only. APPROVE is a recommendation "
+            "to a human, not an authorization or an approved expenditure. "
+            "The dollar range is an AI-generated planning estimate, not a quote "
+            "or calculation from verified rates. Do not claim bookings, spending, "
+            "or contingency funding are confirmed. Human approval remains required."
+        )
+        if event.evidence_mode == "historical_replay":
+            prompt += (
+                f"\nEvidence mode: historical_replay. Event date: {event.scheduled_date}. "
+                f"Event city: {event.location.city}, {event.location.country}. "
+                "Evaluate fictional production during the historical event, not a "
+                "current emergency. Identify the production and costs as simulated."
+            )
+
         # --- Gemini call (runtime, not just README mention) -----------------
         response = self._gemini.models.generate_content(
             model=GEMINI_MODEL, contents=prompt
