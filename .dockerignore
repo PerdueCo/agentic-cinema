@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+**/node_modules
+**/dist
+reports
+digital-twin-trailer-parallel
+*.zip
+.env
+.env.*
+!.env.example

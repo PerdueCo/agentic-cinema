@@ -25,9 +25,23 @@ from src.shared.schemas import SceneLocation, WeatherDisruptionEvent
 load_dotenv()
 
 app = FastAPI(title="Agentic Studio Digital Twin API", version="0.1.0")
+
+
+def cors_allowed_origins() -> list[str]:
+    """Use explicit origins in Cloud Run while preserving local development."""
+    configured = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    if configured.strip():
+        return [
+            origin.strip().rstrip("/")
+            for origin in configured.split(",")
+            if origin.strip()
+        ]
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
