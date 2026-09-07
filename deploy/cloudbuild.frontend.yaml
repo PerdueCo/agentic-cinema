@@ -1,0 +1,15 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - "VITE_API_BASE=${_VITE_API_BASE}"
+      - --file
+      - agentic-studio-functional-demo/frontend/Dockerfile
+      - --tag
+      - "${_IMAGE}"
+      - agentic-studio-functional-demo/frontend
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_IMAGE}"]
+images:
+  - "${_IMAGE}"
